@@ -1,0 +1,15 @@
+# Example artist data file
+# Format: artist_name,artist_data
+# Lines starting with # are comments and will be ignored
+# Blank lines are also ignored
+
+Taylor Swift,Pop singer-songwriter known for autobiographical lyrics and genre evolution
+Drake,Canadian rapper and singer from Toronto
+# This is a comment line
+Billie Eilish,Alternative pop artist known for whisper vocals and dark themes
+
+The Weeknd,R&B and pop artist with atmospheric production
+# Another comment
+BTS,Korean boy band that popularized K-pop globally
+
+Artist with no additional data,
