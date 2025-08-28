@@ -35,8 +35,6 @@ def apply_environment_defaults(args):
     """Apply environment variable defaults to parsed arguments."""
     if args.prompt_id is None:
         args.prompt_id = os.getenv('OPENAI_PROMPT_ID')
-    if args.model is None:
-        args.model = os.getenv('OPENAI_MODEL', 'gpt-4')
     return args
 
 
@@ -51,7 +49,6 @@ def main():
     logger.info("Starting artist bio generation process")
     logger.info(f"Input file: {args.input_file}")
     logger.info(f"Prompt ID: {args.prompt_id}")
-    logger.info(f"Model: {args.model}")
     
     # TODO: Implement the rest of the functionality
     print("Script initialized successfully!")
@@ -65,7 +62,7 @@ def create_argument_parser() -> argparse.ArgumentParser:
         epilog="""
 Examples:
   python run_artists.py --input-file artists.csv --prompt-id prompt_123
-  python run_artists.py --input-file data.txt --model gpt-4 --max-workers 8
+  python run_artists.py --input-file data.txt --max-workers 8
   python run_artists.py --input-file artists.csv --dry-run
         """
     )
@@ -84,11 +81,7 @@ Examples:
         help='OpenAI prompt ID (default: OPENAI_PROMPT_ID env var)'
     )
     
-    parser.add_argument(
-        '--model',
-        default=None,
-        help='OpenAI model to use (default: OPENAI_MODEL env var or gpt-4)'
-    )
+
     
     parser.add_argument(
         '--version',

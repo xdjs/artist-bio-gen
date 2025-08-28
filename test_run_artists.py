@@ -54,29 +54,7 @@ class TestArgumentParser(unittest.TestCase):
             args = run_artists.apply_environment_defaults(args)
             self.assertEqual(args.prompt_id, 'explicit_prompt')
     
-    def test_model_default_from_env(self):
-        """Test that model defaults to environment variable."""
-        with patch.dict(os.environ, {'OPENAI_MODEL': 'gpt-3.5-turbo'}):
-            args = self.parser.parse_args(['--input-file', 'test.csv'])
-            args = run_artists.apply_environment_defaults(args)
-            self.assertEqual(args.model, 'gpt-3.5-turbo')
-    
-    def test_model_fallback_default(self):
-        """Test that model falls back to gpt-4 when no env var is set."""
-        with patch.dict(os.environ, {}, clear=True):
-            args = self.parser.parse_args(['--input-file', 'test.csv'])
-            args = run_artists.apply_environment_defaults(args)
-            self.assertEqual(args.model, 'gpt-4')
-    
-    def test_model_explicit_override(self):
-        """Test that explicit model overrides environment variable."""
-        with patch.dict(os.environ, {'OPENAI_MODEL': 'gpt-3.5-turbo'}):
-            args = self.parser.parse_args([
-                '--input-file', 'test.csv',
-                '--model', 'gpt-4-turbo'
-            ])
-            args = run_artists.apply_environment_defaults(args)
-            self.assertEqual(args.model, 'gpt-4-turbo')
+
     
     def test_version_argument(self):
         """Test that version argument is optional and parsed correctly."""
@@ -144,7 +122,6 @@ class TestArgumentParser(unittest.TestCase):
         args = self.parser.parse_args([
             '--input-file', 'artists.csv',
             '--prompt-id', 'prompt_456',
-            '--model', 'gpt-4-turbo',
             '--version', 'v2.0',
             '--output', 'results.jsonl',
             '--max-workers', '10',
@@ -153,7 +130,6 @@ class TestArgumentParser(unittest.TestCase):
         
         self.assertEqual(args.input_file, 'artists.csv')
         self.assertEqual(args.prompt_id, 'prompt_456')
-        self.assertEqual(args.model, 'gpt-4-turbo')
         self.assertEqual(args.version, 'v2.0')
         self.assertEqual(args.output, 'results.jsonl')
         self.assertEqual(args.max_workers, 10)
@@ -169,7 +145,6 @@ class TestArgumentParser(unittest.TestCase):
         self.assertIn('Generate artist bios using OpenAI Responses API', help_text)
         self.assertIn('--input-file', help_text)
         self.assertIn('--prompt-id', help_text)
-        self.assertIn('--model', help_text)
         self.assertIn('--version', help_text)
         self.assertIn('--output', help_text)
         self.assertIn('--max-workers', help_text)
@@ -184,7 +159,7 @@ class TestArgumentParser(unittest.TestCase):
         
         # Check for example commands
         self.assertIn('python run_artists.py --input-file artists.csv --prompt-id prompt_123', help_text)
-        self.assertIn('python run_artists.py --input-file data.txt --model gpt-4 --max-workers 8', help_text)
+        self.assertIn('python run_artists.py --input-file data.txt --max-workers 8', help_text)
         self.assertIn('python run_artists.py --input-file artists.csv --dry-run', help_text)
 
 
@@ -216,7 +191,7 @@ class TestMainFunction(unittest.TestCase):
     @patch('run_artists.logger')
     def test_main_function_logging(self, mock_logger):
         """Test that main function logs expected information."""
-        sys.argv = ['run_artists.py', '--input-file', 'artists.csv', '--prompt-id', 'prompt_123', '--model', 'gpt-4']
+        sys.argv = ['run_artists.py', '--input-file', 'artists.csv', '--prompt-id', 'prompt_123']
         
         try:
             run_artists.main()
@@ -228,7 +203,6 @@ class TestMainFunction(unittest.TestCase):
         self.assertIn("Starting artist bio generation process", log_calls)
         self.assertIn("Input file: artists.csv", log_calls)
         self.assertIn("Prompt ID: prompt_123", log_calls)
-        self.assertIn("Model: gpt-4", log_calls)
 
 
 class TestEnvironmentVariableHandling(unittest.TestCase):
@@ -244,7 +218,6 @@ class TestEnvironmentVariableHandling(unittest.TestCase):
             args = self.parser.parse_args(['--input-file', 'test.csv'])
             args = run_artists.apply_environment_defaults(args)
             self.assertIsNone(args.prompt_id)
-            self.assertEqual(args.model, 'gpt-4')
     
     def test_partial_environment_variables(self):
         """Test behavior when only some environment variables are set."""
@@ -252,18 +225,15 @@ class TestEnvironmentVariableHandling(unittest.TestCase):
             args = self.parser.parse_args(['--input-file', 'test.csv'])
             args = run_artists.apply_environment_defaults(args)
             self.assertEqual(args.prompt_id, 'test_prompt')
-            self.assertEqual(args.model, 'gpt-4')
     
     def test_all_environment_variables(self):
         """Test behavior when all environment variables are set."""
         with patch.dict(os.environ, {
-            'OPENAI_PROMPT_ID': 'env_prompt',
-            'OPENAI_MODEL': 'env_model'
+            'OPENAI_PROMPT_ID': 'env_prompt'
         }):
             args = self.parser.parse_args(['--input-file', 'test.csv'])
             args = run_artists.apply_environment_defaults(args)
             self.assertEqual(args.prompt_id, 'env_prompt')
-            self.assertEqual(args.model, 'env_model')
 
 
 class TestArgumentValidation(unittest.TestCase):
