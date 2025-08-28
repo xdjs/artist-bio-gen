@@ -15,6 +15,14 @@ import sys
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
+# Load environment variables from .env.local file
+try:
+    from dotenv import load_dotenv
+    load_dotenv('.env.local')
+except ImportError:
+    # dotenv not available, continue without it
+    pass
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
