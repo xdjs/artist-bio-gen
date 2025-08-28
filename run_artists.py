@@ -12,6 +12,7 @@ import json
 import logging
 import os
 import sys
+import time
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, NamedTuple
 
@@ -170,6 +171,8 @@ def call_openai_api(client: OpenAI, artist: ArtistData, prompt_id: str, version:
     Returns:
         ApiResponse with the result or error information
     """
+    start_time = time.time()
+    
     try:
         # Build variables dictionary
         variables = {
@@ -197,7 +200,11 @@ def call_openai_api(client: OpenAI, artist: ArtistData, prompt_id: str, version:
         response_id = response.id
         created = int(response.created_at)
         
-        logger.info(f"Successfully processed artist: {artist.name}")
+        # Calculate timing
+        end_time = time.time()
+        duration = end_time - start_time
+        
+        logger.info(f"Successfully processed artist: {artist.name} (took {duration:.2f}s)")
         
         return ApiResponse(
             artist_name=artist.name,
@@ -208,8 +215,12 @@ def call_openai_api(client: OpenAI, artist: ArtistData, prompt_id: str, version:
         )
         
     except Exception as e:
+        # Calculate timing even for errors
+        end_time = time.time()
+        duration = end_time - start_time
+        
         error_msg = f"API call failed for artist '{artist.name}': {str(e)}"
-        logger.error(error_msg)
+        logger.error(f"{error_msg} (took {duration:.2f}s)")
         
         return ApiResponse(
             artist_name=artist.name,
@@ -276,6 +287,9 @@ def main():
         successful_calls = 0
         failed_calls = 0
         
+        # Start overall timing
+        overall_start_time = time.time()
+        
         for i, artist in enumerate(parse_result.artists, 1):
             logger.info(f"Processing artist {i}/{len(parse_result.artists)}: {artist.name}")
             
@@ -292,8 +306,17 @@ def main():
                 
                 # TODO: Write to JSONL file (will be implemented in output formatting task)
         
+        # Calculate overall timing
+        overall_end_time = time.time()
+        overall_duration = overall_end_time - overall_start_time
+        
         # Summary
         logger.info(f"Processing completed: {successful_calls} successful, {failed_calls} failed")
+        logger.info(f"Total processing time: {overall_duration:.2f}s")
+        
+        if successful_calls > 0:
+            avg_time_per_artist = overall_duration / successful_calls
+            logger.info(f"Average time per artist: {avg_time_per_artist:.2f}s")
         
         if failed_calls > 0:
             logger.warning(f"{failed_calls} artists failed to process")
