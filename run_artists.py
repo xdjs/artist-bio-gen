@@ -49,7 +49,16 @@ try:
     from openai import OpenAI
 except ImportError:
     logger.error("OpenAI package not installed. Please install with: pip install openai")
-    sys.exit(1)
+    sys.exit(3)
+
+
+# Exit codes for different failure modes
+EXIT_SUCCESS = 0
+EXIT_INPUT_ERROR = 2
+EXIT_CONFIG_ERROR = 3
+EXIT_API_FAILURES = 4
+EXIT_INTERRUPTED = 130  # Conventional exit code for Ctrl+C
+EXIT_UNEXPECTED_ERROR = 10
 
 
 class ArtistData(NamedTuple):
@@ -178,7 +187,7 @@ def create_openai_client() -> OpenAI:
     api_key = os.getenv('OPENAI_API_KEY')
     if not api_key:
         logger.error("OPENAI_API_KEY environment variable not set")
-        sys.exit(1)
+        sys.exit(EXIT_CONFIG_ERROR)
     
     client = OpenAI(api_key=api_key)
     logger.info("OpenAI client initialized successfully")
@@ -246,7 +255,8 @@ def call_openai_api(client: OpenAI, artist: ArtistData, prompt_id: str, version:
         end_time = time.time()
         duration = end_time - start_time
         
-        error_msg = f"API call failed for artist '{artist.name}': {str(e)}"
+        exc_name = type(e).__name__
+        error_msg = f"API call failed for artist '{artist.name}' [{exc_name}]: {str(e)}"
         
         api_response = ApiResponse(
             artist_name=artist.name,
@@ -265,6 +275,20 @@ def apply_environment_defaults(args):
     if args.prompt_id is None:
         args.prompt_id = os.getenv('OPENAI_PROMPT_ID')
     return args
+
+
+def _is_output_path_writable(path_str: str) -> Tuple[bool, Optional[str]]:
+    """Check whether the output path's parent directory is writable without creating the file."""
+    try:
+        path = Path(path_str)
+        parent = path.parent if path.parent != Path("") else Path(".")
+        if not parent.exists():
+            return False, f"Output directory does not exist: {parent}"
+        if not os.access(parent, os.W_OK):
+            return False, f"No write permission for directory: {parent}"
+        return True, None
+    except Exception as e:
+        return False, f"Unable to validate output path '{path_str}': {e}"
 
 
 def log_processing_start(total_artists: int, input_file: str, prompt_id: str, max_workers: int) -> float:
@@ -478,7 +502,14 @@ def main():
         # Validate required configuration
         if not args.prompt_id:
             logger.error("Prompt ID is required. Set OPENAI_PROMPT_ID environment variable or use --prompt-id")
-            sys.exit(1)
+            sys.exit(EXIT_CONFIG_ERROR)
+
+        # Validate output path (non-destructive check)
+        if not args.dry_run:
+            ok, reason = _is_output_path_writable(args.output)
+            if not ok:
+                logger.error(f"Invalid output path: {reason}")
+                sys.exit(EXIT_INPUT_ERROR)
         
         # Initialize OpenAI client
         client = create_openai_client()
@@ -498,32 +529,49 @@ def main():
         # Log periodic progress updates
         progress_interval = max(1, len(parse_result.artists) // 10)  # Log every 10% or at least every artist
         
-        for i, artist in enumerate(parse_result.artists, 1):
-            # Make API call
-            api_response, artist_duration = call_openai_api(client, artist, args.prompt_id, args.version)
-            
-            if api_response.error:
-                failed_calls += 1
-                log_progress_update(i, len(parse_result.artists), artist.name, False, artist_duration)
-            else:
-                successful_calls += 1
-                log_progress_update(i, len(parse_result.artists), artist.name, True, artist_duration)
-                # Print response to stdout
-                print(api_response.response_text)
+        try:
+            for i, artist in enumerate(parse_result.artists, 1):
+                # Make API call
+                api_response, artist_duration = call_openai_api(client, artist, args.prompt_id, args.version)
                 
-                # TODO: Write to JSONL file (will be implemented in output formatting task)
-            
-            # Log periodic summary
-            if i % progress_interval == 0 or i == len(parse_result.artists):
-                elapsed_time = time.time() - start_time
-                current_rate = i / elapsed_time if elapsed_time > 0 else 0
-                remaining_artists = len(parse_result.artists) - i
-                estimated_remaining_time = remaining_artists / current_rate if current_rate > 0 else 0
+                if api_response.error:
+                    failed_calls += 1
+                    log_progress_update(i, len(parse_result.artists), artist.name, False, artist_duration)
+                else:
+                    successful_calls += 1
+                    log_progress_update(i, len(parse_result.artists), artist.name, True, artist_duration)
+                    # Print response to stdout
+                    print(api_response.response_text)
+                    
+                    # TODO: Write to JSONL file (will be implemented in output formatting task)
                 
-                logger.info(f"📊 Progress Update: {i}/{len(parse_result.artists)} artists processed "
-                          f"({(i/len(parse_result.artists)*100):.1f}%) - "
-                          f"Rate: {current_rate:.2f} artists/sec - "
-                          f"ETA: {estimated_remaining_time:.0f}s remaining")
+                # Log periodic summary
+                if i % progress_interval == 0 or i == len(parse_result.artists):
+                    elapsed_time = time.time() - start_time
+                    current_rate = i / elapsed_time if elapsed_time > 0 else 0
+                    remaining_artists = len(parse_result.artists) - i
+                    estimated_remaining_time = remaining_artists / current_rate if current_rate > 0 else 0
+                    
+                    logger.info(f"📊 Progress Update: {i}/{len(parse_result.artists)} artists processed "
+                              f"({(i/len(parse_result.artists)*100):.1f}%) - "
+                              f"Rate: {current_rate:.2f} artists/sec - "
+                              f"ETA: {estimated_remaining_time:.0f}s remaining")
+        except KeyboardInterrupt:
+            # Graceful interruption handling
+            end_time = time.time()
+            processed = successful_calls + failed_calls
+            stats = calculate_processing_stats(
+                total_artists=processed,
+                successful_calls=successful_calls,
+                failed_calls=failed_calls,
+                skipped_lines=parse_result.skipped_lines,
+                error_lines=parse_result.error_lines,
+                start_time=start_time,
+                end_time=end_time
+            )
+            logger.warning("Processing interrupted by user (Ctrl+C). Partial summary:")
+            log_processing_summary(stats)
+            sys.exit(EXIT_INTERRUPTED)
         
         # Calculate overall timing and statistics
         end_time = time.time()
@@ -543,16 +591,17 @@ def main():
         # Exit with appropriate code
         if failed_calls > 0:
             logger.error(f"Processing completed with {failed_calls} failures")
-            sys.exit(1)
+            sys.exit(EXIT_API_FAILURES)
         else:
             logger.info("🎉 All artists processed successfully!")
         
-    except (FileNotFoundError, UnicodeDecodeError) as e:
+    except (FileNotFoundError, UnicodeDecodeError, PermissionError) as e:
         logger.error(f"Failed to process input file: {e}")
+        # Maintain legacy behavior expected by tests
         sys.exit(1)
     except Exception as e:
         logger.error(f"Unexpected error: {e}")
-        sys.exit(1)
+        sys.exit(EXIT_UNEXPECTED_ERROR)
 
 
 def create_argument_parser() -> argparse.ArgumentParser:
