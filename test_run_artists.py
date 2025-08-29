@@ -7,6 +7,7 @@ focusing on CLI argument parsing and basic functionality.
 """
 
 import argparse
+import json
 import os
 import sys
 import tempfile
@@ -315,7 +316,193 @@ if __name__ == '__main__':
         tests = unittest.TestLoader().loadTestsFromTestCase(test_class)
         test_suite.addTests(tests)
     
-    # Run the tests
+class TestJsonlOutput(unittest.TestCase):
+    """Test cases for JSONL output functionality."""
+    
+    def setUp(self):
+        """Set up test fixtures."""
+        self.temp_dir = tempfile.mkdtemp()
+        self.output_file = os.path.join(self.temp_dir, 'test_output.jsonl')
+    
+    def tearDown(self):
+        """Clean up test fixtures."""
+        if os.path.exists(self.output_file):
+            os.unlink(self.output_file)
+        os.rmdir(self.temp_dir)
+    
+    def test_write_jsonl_output_success(self):
+        """Test writing successful API responses to JSONL file."""
+        # Create test responses
+        responses = [
+            run_artists.ApiResponse(
+                artist_name="Taylor Swift",
+                artist_data="Pop singer-songwriter",
+                response_text="Taylor Swift is a Grammy-winning pop artist...",
+                response_id="resp_123",
+                created=1234567890,
+                error=None
+            ),
+            run_artists.ApiResponse(
+                artist_name="Drake",
+                artist_data=None,
+                response_text="Drake is a Canadian rapper and singer...",
+                response_id="resp_456",
+                created=1234567891,
+                error=None
+            )
+        ]
+        
+        # Write to JSONL file
+        run_artists.write_jsonl_output(
+            responses=responses,
+            output_path=self.output_file,
+            prompt_id="test_prompt_123",
+            version="v1.0"
+        )
+        
+        # Verify file was created
+        self.assertTrue(os.path.exists(self.output_file))
+        
+        # Read and verify content
+        with open(self.output_file, 'r', encoding='utf-8') as f:
+            lines = f.readlines()
+        
+        self.assertEqual(len(lines), 2)
+        
+        # Parse first record
+        record1 = json.loads(lines[0])
+        self.assertEqual(record1["artist_name"], "Taylor Swift")
+        self.assertEqual(record1["artist_data"], "Pop singer-songwriter")
+        self.assertEqual(record1["request"]["prompt_id"], "test_prompt_123")
+        self.assertEqual(record1["request"]["version"], "v1.0")
+        self.assertEqual(record1["request"]["variables"]["artist_name"], "Taylor Swift")
+        self.assertEqual(record1["request"]["variables"]["artist_data"], "Pop singer-songwriter")
+        self.assertEqual(record1["response_text"], "Taylor Swift is a Grammy-winning pop artist...")
+        self.assertEqual(record1["response_id"], "resp_123")
+        self.assertEqual(record1["created"], 1234567890)
+        self.assertIsNone(record1["error"])
+        
+        # Parse second record (no artist_data)
+        record2 = json.loads(lines[1])
+        self.assertEqual(record2["artist_name"], "Drake")
+        self.assertNotIn("artist_data", record2)  # Should be omitted when empty
+        self.assertEqual(record2["request"]["variables"]["artist_data"], "No additional data provided")
+        self.assertEqual(record2["response_text"], "Drake is a Canadian rapper and singer...")
+        self.assertEqual(record2["response_id"], "resp_456")
+        self.assertEqual(record2["created"], 1234567891)
+        self.assertIsNone(record2["error"])
+    
+    def test_write_jsonl_output_with_errors(self):
+        """Test writing API responses with errors to JSONL file."""
+        # Create test responses with errors
+        responses = [
+            run_artists.ApiResponse(
+                artist_name="Failed Artist",
+                artist_data="Some data",
+                response_text="",
+                response_id="",
+                created=0,
+                error="API call failed: Rate limit exceeded"
+            )
+        ]
+        
+        # Write to JSONL file
+        run_artists.write_jsonl_output(
+            responses=responses,
+            output_path=self.output_file,
+            prompt_id="test_prompt_123"
+        )
+        
+        # Verify file was created
+        self.assertTrue(os.path.exists(self.output_file))
+        
+        # Read and verify content
+        with open(self.output_file, 'r', encoding='utf-8') as f:
+            lines = f.readlines()
+        
+        self.assertEqual(len(lines), 1)
+        
+        # Parse record
+        record = json.loads(lines[0])
+        self.assertEqual(record["artist_name"], "Failed Artist")
+        self.assertEqual(record["artist_data"], "Some data")
+        self.assertEqual(record["request"]["prompt_id"], "test_prompt_123")
+        self.assertNotIn("version", record["request"])  # No version provided
+        self.assertEqual(record["response_text"], "")
+        self.assertEqual(record["response_id"], "")
+        self.assertEqual(record["created"], 0)
+        self.assertEqual(record["error"], "API call failed: Rate limit exceeded")
+    
+    def test_write_jsonl_output_no_version(self):
+        """Test writing JSONL output without version parameter."""
+        responses = [
+            run_artists.ApiResponse(
+                artist_name="Test Artist",
+                artist_data=None,
+                response_text="Test response",
+                response_id="resp_789",
+                created=1234567892,
+                error=None
+            )
+        ]
+        
+        # Write to JSONL file without version
+        run_artists.write_jsonl_output(
+            responses=responses,
+            output_path=self.output_file,
+            prompt_id="test_prompt_456"
+        )
+        
+        # Read and verify content
+        with open(self.output_file, 'r', encoding='utf-8') as f:
+            lines = f.readlines()
+        
+        record = json.loads(lines[0])
+        self.assertNotIn("version", record["request"])
+    
+    def test_write_jsonl_output_utf8_support(self):
+        """Test writing JSONL output with UTF-8 characters."""
+        responses = [
+            run_artists.ApiResponse(
+                artist_name="Björk",
+                artist_data="Icelandic singer-songwriter",
+                response_text="Björk is an Icelandic artist known for her experimental music...",
+                response_id="resp_utf8",
+                created=1234567893,
+                error=None
+            )
+        ]
+        
+        # Write to JSONL file
+        run_artists.write_jsonl_output(
+            responses=responses,
+            output_path=self.output_file,
+            prompt_id="test_prompt_utf8"
+        )
+        
+        # Read and verify content
+        with open(self.output_file, 'r', encoding='utf-8') as f:
+            lines = f.readlines()
+        
+        record = json.loads(lines[0])
+        self.assertEqual(record["artist_name"], "Björk")
+        self.assertEqual(record["artist_data"], "Icelandic singer-songwriter")
+        self.assertIn("Björk", record["response_text"])
+
+
+if __name__ == "__main__":
+    # Create test suite
+    test_suite = unittest.TestSuite()
+    
+    # Add test cases
+    test_suite.addTest(unittest.makeSuite(TestArgumentParser))
+    test_suite.addTest(unittest.makeSuite(TestArgumentValidation))
+    test_suite.addTest(unittest.makeSuite(TestEnvironmentVariableHandling))
+    test_suite.addTest(unittest.makeSuite(TestFileStructure))
+    test_suite.addTest(unittest.makeSuite(TestMainFunction))
+    test_suite.addTest(unittest.makeSuite(TestJsonlOutput))
+    
+    # Run tests
     runner = unittest.TextTestRunner(verbosity=2)
     result = runner.run(test_suite)
     
