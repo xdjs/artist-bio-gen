@@ -13,6 +13,7 @@ import logging
 import os
 import sys
 import time
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, NamedTuple
 
@@ -25,10 +26,22 @@ except ImportError:
     pass
 
 # Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s'
-)
+def setup_logging(verbose: bool = False):
+    """Setup logging configuration with appropriate level and format."""
+    level = logging.DEBUG if verbose else logging.INFO
+    format_string = '%(asctime)s - %(levelname)s - %(message)s'
+    
+    logging.basicConfig(
+        level=level,
+        format=format_string,
+        datefmt='%Y-%m-%d %H:%M:%S'
+    )
+    
+    # Set specific logger levels
+    logging.getLogger('openai').setLevel(logging.WARNING)  # Reduce OpenAI client noise
+    logging.getLogger('urllib3').setLevel(logging.WARNING)  # Reduce HTTP client noise
+
+setup_logging()
 logger = logging.getLogger('__main__')
 
 # OpenAI client
@@ -60,6 +73,20 @@ class ApiResponse(NamedTuple):
     response_id: str
     created: int
     error: Optional[str] = None
+
+
+class ProcessingStats(NamedTuple):
+    """Statistics for processing operations."""
+    total_artists: int
+    successful_calls: int
+    failed_calls: int
+    skipped_lines: int
+    error_lines: int
+    start_time: float
+    end_time: float
+    total_duration: float
+    avg_time_per_artist: float
+    api_calls_per_second: float
 
 
 def parse_input_file(file_path: str) -> ParseResult:
@@ -158,7 +185,7 @@ def create_openai_client() -> OpenAI:
     return client
 
 
-def call_openai_api(client: OpenAI, artist: ArtistData, prompt_id: str, version: Optional[str] = None) -> ApiResponse:
+def call_openai_api(client: OpenAI, artist: ArtistData, prompt_id: str, version: Optional[str] = None) -> Tuple[ApiResponse, float]:
     """
     Make an API call to OpenAI Responses API for a single artist.
     
@@ -169,7 +196,7 @@ def call_openai_api(client: OpenAI, artist: ArtistData, prompt_id: str, version:
         version: Optional prompt version
         
     Returns:
-        ApiResponse with the result or error information
+        Tuple of (ApiResponse with the result or error information, duration in seconds)
     """
     start_time = time.time()
     
@@ -204,9 +231,7 @@ def call_openai_api(client: OpenAI, artist: ArtistData, prompt_id: str, version:
         end_time = time.time()
         duration = end_time - start_time
         
-        logger.info(f"Successfully processed artist: {artist.name} (took {duration:.2f}s)")
-        
-        return ApiResponse(
+        api_response = ApiResponse(
             artist_name=artist.name,
             artist_data=artist.data,
             response_text=response_text,
@@ -214,15 +239,16 @@ def call_openai_api(client: OpenAI, artist: ArtistData, prompt_id: str, version:
             created=created
         )
         
+        return api_response, duration
+        
     except Exception as e:
         # Calculate timing even for errors
         end_time = time.time()
         duration = end_time - start_time
         
         error_msg = f"API call failed for artist '{artist.name}': {str(e)}"
-        logger.error(f"{error_msg} (took {duration:.2f}s)")
         
-        return ApiResponse(
+        api_response = ApiResponse(
             artist_name=artist.name,
             artist_data=artist.data,
             response_text="",
@@ -230,6 +256,8 @@ def call_openai_api(client: OpenAI, artist: ArtistData, prompt_id: str, version:
             created=0,
             error=error_msg
         )
+        
+        return api_response, duration
 
 
 def apply_environment_defaults(args):
@@ -239,17 +267,186 @@ def apply_environment_defaults(args):
     return args
 
 
+def log_processing_start(total_artists: int, input_file: str, prompt_id: str, max_workers: int) -> float:
+    """
+    Log the start of processing with configuration details.
+    
+    Args:
+        total_artists: Total number of artists to process
+        input_file: Path to input file
+        prompt_id: OpenAI prompt ID
+        max_workers: Maximum number of concurrent workers
+        
+    Returns:
+        Start timestamp for timing calculations
+    """
+    start_time = time.time()
+    start_datetime = datetime.fromtimestamp(start_time)
+    
+    logger.info("=" * 70)
+    logger.info("ARTIST BIO GENERATION - PROCESSING STARTED")
+    logger.info("=" * 70)
+    logger.info(f"Start time: {start_datetime.strftime('%Y-%m-%d %H:%M:%S')}")
+    logger.info(f"Input file: {input_file}")
+    logger.info(f"Prompt ID: {prompt_id}")
+    logger.info(f"Total artists to process: {total_artists}")
+    logger.info(f"Max concurrent workers: {max_workers}")
+    logger.info("=" * 70)
+    
+    return start_time
+
+
+def create_progress_bar(current: int, total: int, width: int = 30) -> str:
+    """
+    Create a text-based progress bar.
+    
+    Args:
+        current: Current progress (1-based)
+        total: Total items
+        width: Width of the progress bar
+        
+    Returns:
+        Progress bar string
+    """
+    if total == 0:
+        return "[" + " " * width + "]"
+    
+    percentage = current / total
+    filled = int(width * percentage)
+    bar = "█" * filled + "░" * (width - filled)
+    return f"[{bar}]"
+
+
+def log_progress_update(current: int, total: int, artist_name: str, success: bool, duration: float):
+    """
+    Log progress update for individual artist processing.
+    
+    Args:
+        current: Current artist number (1-based)
+        total: Total number of artists
+        artist_name: Name of the artist being processed
+        success: Whether the processing was successful
+        duration: Time taken for this artist
+    """
+    percentage = (current / total) * 100
+    status_icon = "✅" if success else "❌"
+    status_text = "SUCCESS" if success else "FAILED"
+    progress_bar = create_progress_bar(current, total)
+    
+    logger.info(f"{progress_bar} [{current:3d}/{total:3d}] ({percentage:5.1f}%) {status_icon} {artist_name} - {status_text} ({duration:.2f}s)")
+
+
+def log_processing_summary(stats: ProcessingStats):
+    """
+    Log comprehensive processing summary with statistics.
+    
+    Args:
+        stats: Processing statistics to log
+    """
+    end_datetime = datetime.fromtimestamp(stats.end_time)
+    
+    logger.info("=" * 70)
+    logger.info("PROCESSING SUMMARY")
+    logger.info("=" * 70)
+    logger.info(f"End time: {end_datetime.strftime('%Y-%m-%d %H:%M:%S')}")
+    logger.info(f"Total duration: {stats.total_duration:.2f} seconds ({timedelta(seconds=int(stats.total_duration))})")
+    logger.info("")
+    logger.info("INPUT STATISTICS:")
+    logger.info(f"  Total artists processed: {stats.total_artists}")
+    logger.info(f"  Skipped lines (comments/blanks): {stats.skipped_lines}")
+    logger.info(f"  Error lines (invalid data): {stats.error_lines}")
+    logger.info("")
+    logger.info("API CALL STATISTICS:")
+    logger.info(f"  Successful calls: {stats.successful_calls}")
+    logger.info(f"  Failed calls: {stats.failed_calls}")
+    logger.info(f"  Success rate: {(stats.successful_calls / stats.total_artists * 100):.1f}%")
+    logger.info("")
+    logger.info("PERFORMANCE STATISTICS:")
+    logger.info(f"  Average time per artist: {stats.avg_time_per_artist:.2f}s")
+    logger.info(f"  API calls per second: {stats.api_calls_per_second:.2f}")
+    
+    if stats.successful_calls > 0:
+        estimated_total_time = stats.avg_time_per_artist * stats.total_artists
+        logger.info(f"  Estimated total time: {estimated_total_time:.2f}s")
+    
+    # Calculate efficiency metrics
+    if stats.total_artists > 0:
+        processing_efficiency = (stats.successful_calls / stats.total_artists) * 100
+        logger.info(f"  Processing efficiency: {processing_efficiency:.1f}%")
+    
+    # Time breakdown
+    if stats.total_duration > 0:
+        successful_time = stats.avg_time_per_artist * stats.successful_calls
+        failed_time = stats.total_duration - successful_time
+        logger.info(f"  Time spent on successful calls: {successful_time:.2f}s")
+        if failed_time > 0:
+            logger.info(f"  Time spent on failed calls: {failed_time:.2f}s")
+    
+    logger.info("=" * 70)
+    
+    # Log warnings for any issues
+    if stats.failed_calls > 0:
+        logger.warning(f"⚠️  {stats.failed_calls} artists failed to process")
+    
+    if stats.error_lines > 0:
+        logger.warning(f"⚠️  {stats.error_lines} lines had parsing errors")
+    
+    if stats.skipped_lines > 0:
+        logger.info(f"ℹ️  {stats.skipped_lines} lines were skipped (comments/blanks)")
+
+
+def calculate_processing_stats(
+    total_artists: int,
+    successful_calls: int,
+    failed_calls: int,
+    skipped_lines: int,
+    error_lines: int,
+    start_time: float,
+    end_time: float
+) -> ProcessingStats:
+    """
+    Calculate comprehensive processing statistics.
+    
+    Args:
+        total_artists: Total number of artists
+        successful_calls: Number of successful API calls
+        failed_calls: Number of failed API calls
+        skipped_lines: Number of skipped lines
+        error_lines: Number of error lines
+        start_time: Processing start timestamp
+        end_time: Processing end timestamp
+        
+    Returns:
+        ProcessingStats object with calculated statistics
+    """
+    total_duration = end_time - start_time
+    avg_time_per_artist = total_duration / total_artists if total_artists > 0 else 0
+    api_calls_per_second = total_artists / total_duration if total_duration > 0 else 0
+    
+    return ProcessingStats(
+        total_artists=total_artists,
+        successful_calls=successful_calls,
+        failed_calls=failed_calls,
+        skipped_lines=skipped_lines,
+        error_lines=error_lines,
+        start_time=start_time,
+        end_time=end_time,
+        total_duration=total_duration,
+        avg_time_per_artist=avg_time_per_artist,
+        api_calls_per_second=api_calls_per_second
+    )
+
+
 def main():
     """Main entry point for the script."""
     parser = create_argument_parser()
     args = parser.parse_args()
     
+    # Setup logging with verbose flag
+    setup_logging(verbose=args.verbose)
+    
     # Handle environment variable defaults
     args = apply_environment_defaults(args)
-    
-    logger.info("Starting artist bio generation process")
-    logger.info(f"Input file: {args.input_file}")
-    logger.info(f"Prompt ID: {args.prompt_id}")
     
     try:
         # Parse the input file
@@ -260,7 +457,9 @@ def main():
             sys.exit(1)
         
         if args.dry_run:
-            logger.info("DRY RUN MODE - Showing first 5 artist payloads:")
+            logger.info("=" * 70)
+            logger.info("DRY RUN MODE - SHOWING FIRST 5 ARTIST PAYLOADS")
+            logger.info("=" * 70)
             for i, artist in enumerate(parse_result.artists[:5], 1):
                 payload = {
                     "artist_name": artist.name,
@@ -271,7 +470,9 @@ def main():
             if len(parse_result.artists) > 5:
                 print(f"... and {len(parse_result.artists) - 5} more artists")
             
-            logger.info("Dry run completed successfully")
+            logger.info("=" * 70)
+            logger.info("DRY RUN COMPLETED SUCCESSFULLY")
+            logger.info("=" * 70)
             return
         
         # Validate required configuration
@@ -282,45 +483,69 @@ def main():
         # Initialize OpenAI client
         client = create_openai_client()
         
+        # Log processing start with enhanced details
+        start_time = log_processing_start(
+            total_artists=len(parse_result.artists),
+            input_file=args.input_file,
+            prompt_id=args.prompt_id,
+            max_workers=args.max_workers
+        )
+        
         # Process artists sequentially (concurrency will be added later)
-        logger.info(f"Processing {len(parse_result.artists)} artists...")
         successful_calls = 0
         failed_calls = 0
         
-        # Start overall timing
-        overall_start_time = time.time()
+        # Log periodic progress updates
+        progress_interval = max(1, len(parse_result.artists) // 10)  # Log every 10% or at least every artist
         
         for i, artist in enumerate(parse_result.artists, 1):
-            logger.info(f"Processing artist {i}/{len(parse_result.artists)}: {artist.name}")
-            
             # Make API call
-            api_response = call_openai_api(client, artist, args.prompt_id, args.version)
+            api_response, artist_duration = call_openai_api(client, artist, args.prompt_id, args.version)
             
             if api_response.error:
                 failed_calls += 1
-                logger.error(f"Failed to process {artist.name}: {api_response.error}")
+                log_progress_update(i, len(parse_result.artists), artist.name, False, artist_duration)
             else:
                 successful_calls += 1
+                log_progress_update(i, len(parse_result.artists), artist.name, True, artist_duration)
                 # Print response to stdout
                 print(api_response.response_text)
                 
                 # TODO: Write to JSONL file (will be implemented in output formatting task)
+            
+            # Log periodic summary
+            if i % progress_interval == 0 or i == len(parse_result.artists):
+                elapsed_time = time.time() - start_time
+                current_rate = i / elapsed_time if elapsed_time > 0 else 0
+                remaining_artists = len(parse_result.artists) - i
+                estimated_remaining_time = remaining_artists / current_rate if current_rate > 0 else 0
+                
+                logger.info(f"📊 Progress Update: {i}/{len(parse_result.artists)} artists processed "
+                          f"({(i/len(parse_result.artists)*100):.1f}%) - "
+                          f"Rate: {current_rate:.2f} artists/sec - "
+                          f"ETA: {estimated_remaining_time:.0f}s remaining")
         
-        # Calculate overall timing
-        overall_end_time = time.time()
-        overall_duration = overall_end_time - overall_start_time
+        # Calculate overall timing and statistics
+        end_time = time.time()
+        stats = calculate_processing_stats(
+            total_artists=len(parse_result.artists),
+            successful_calls=successful_calls,
+            failed_calls=failed_calls,
+            skipped_lines=parse_result.skipped_lines,
+            error_lines=parse_result.error_lines,
+            start_time=start_time,
+            end_time=end_time
+        )
         
-        # Summary
-        logger.info(f"Processing completed: {successful_calls} successful, {failed_calls} failed")
-        logger.info(f"Total processing time: {overall_duration:.2f}s")
+        # Log comprehensive summary
+        log_processing_summary(stats)
         
-        if successful_calls > 0:
-            avg_time_per_artist = overall_duration / successful_calls
-            logger.info(f"Average time per artist: {avg_time_per_artist:.2f}s")
-        
+        # Exit with appropriate code
         if failed_calls > 0:
-            logger.warning(f"{failed_calls} artists failed to process")
+            logger.error(f"Processing completed with {failed_calls} failures")
             sys.exit(1)
+        else:
+            logger.info("🎉 All artists processed successfully!")
         
     except (FileNotFoundError, UnicodeDecodeError) as e:
         logger.error(f"Failed to process input file: {e}")
@@ -381,6 +606,12 @@ Examples:
         '--dry-run',
         action='store_true',
         help='Parse inputs and show first 5 payloads without making API calls'
+    )
+    
+    parser.add_argument(
+        '--verbose',
+        action='store_true',
+        help='Enable verbose logging (DEBUG level)'
     )
     
     return parser
