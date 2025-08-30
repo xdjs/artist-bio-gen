@@ -106,7 +106,7 @@ class DatabaseResult(NamedTuple):
 - ✅ Create test data for validation scenarios
 
 ### Phase 4: Database Integration
-**Priority: High | Estimated Time: 4-5 hours** 🚧 **PENDING**
+**Priority: High | Estimated Time: 6-8 hours** 🚧 **PENDING**
 
 #### Task 4.1: Database Connection Management
 ```python
@@ -121,7 +121,13 @@ DEFAULT_CONNECTION_TIMEOUT = 30  # seconds
 DEFAULT_QUERY_TIMEOUT = 60  # seconds
 ```
 
-#### Task 4.2: Database Write Operations
+#### Task 4.2: Database Configuration Management
+- [ ] Implement `DatabaseConfig` and `DatabaseResult` classes from Phase 2.3
+- [ ] Add database URL parsing and validation
+- [ ] Handle connection string parameter validation
+- [ ] Add environment-based configuration (production vs test)
+
+#### Task 4.3: Database Write Operations
 ```python
 @retry_with_exponential_backoff(max_retries=3)
 def update_artist_bio(
@@ -129,6 +135,7 @@ def update_artist_bio(
     artist_id: str,
     bio: str,
     skip_existing: bool = False,
+    test_mode: bool = False,
     worker_id: str = "main"
 ) -> DatabaseResult
 
@@ -138,19 +145,60 @@ def update_artist_bio(
 # - Systemic errors (auth failure, schema issues): Abort processing
 ```
 
-#### Task 4.3: Write Mode Logic
+#### Task 4.4: Integration with Existing Processing Flow
+- [ ] Modify `call_openai_api()` to call database write operations
+- [ ] Update `ApiResponse` objects with database write results (`db_status` field)
+- [ ] Handle database failures without stopping API processing
+- [ ] Integrate database operations into the concurrent processing pipeline
+
+#### Task 4.5: Write Mode Logic
 - [ ] Implement `--write-mode {db,file,both}` logic
 - [ ] Add `--skip-existing` flag behavior
 - [ ] Handle database connection failures gracefully
 - [ ] Add database transaction management
+- [ ] Implement file-only mode (existing behavior)
+- [ ] Implement database-only mode (skip JSONL output)
+- [ ] Implement both mode (database + JSONL simultaneously)
+- [ ] Handle partial failures in "both" mode
 
-#### Task 4.4: SQL Query Implementation
+#### Task 4.6: Database Health Monitoring
+- [ ] Add connection health checks
+- [ ] Implement connection recovery after failures
+- [ ] Add database operation metrics/logging
+- [ ] Handle database connection pool exhaustion
+
+#### Task 4.7: Test Database Schema Management
+- [ ] Create `test_artists` table with same schema as production (`id UUID, name TEXT, bio TEXT`)
+- [ ] Add database setup scripts for development/testing
+- [ ] Implement test table creation/teardown in test suite
+- [ ] Add environment-based table selection (production uses `artists`, tests use `test_artists`)
+
+#### Task 4.8: Development Database Configuration
+- [ ] Add test database connection configuration
+- [ ] Implement table name selection based on environment/mode
+- [ ] Add test data seeding for development
+- [ ] Create database cleanup utilities for tests
+
+#### Task 4.9: Test-Specific Database Operations
+- [ ] Modify SQL queries to use configurable table name
+- [ ] Add test database reset/cleanup functions
+- [ ] Implement isolated test transactions (rollback after tests)
+- [ ] Add test database connection validation
+
+#### Task 4.10: SQL Query Implementation
+```python
+# Configurable table name based on environment
+def get_table_name(test_mode: bool = False) -> str:
+    return "test_artists" if test_mode else "artists"
+
+# Updated SQL queries with dynamic table names
+```
 ```sql
--- Default (force overwrite)
-UPDATE artists SET bio = $2 WHERE id = $1;
+-- Default (force overwrite) - dynamic table name
+UPDATE {table_name} SET bio = $2 WHERE id = $1;
 
--- Skip existing
-UPDATE artists SET bio = $2 WHERE id = $1 AND bio IS NULL;
+-- Skip existing - dynamic table name
+UPDATE {table_name} SET bio = $2 WHERE id = $1 AND bio IS NULL;
 ```
 
 ### Phase 5: CLI Argument Updates
@@ -231,12 +279,13 @@ Note: Removed "model" field since using server defaults
 - ✅ Test error handling scenarios
 
 #### Task 8.2: Integration Tests
-- 🔄 Create test database schema (`test_artists` table) (pending)
+- 🔄 Create test database schema (`test_artists` table) (moved to Phase 4.7)
 - 🔄 Test with real database using test schema (pending)
 - 🔄 Test concurrent database operations (pending)
 - 🔄 Test retry logic for database failures (pending)
 - 🔄 Test different write modes (pending)
 - 🔄 Test error handling (permanent, transient, systemic) (pending)
+- 🔄 Test table name selection (production vs test) (pending)
 
 #### Task 8.3: End-to-End Tests
 - ✅ Test complete workflow with sample data (file mode)
@@ -329,17 +378,19 @@ Note: Removed "model" field since using server defaults
 
 ## Timeline Estimate
 
-**Total Estimated Time: 24-34 hours**
+**Total Estimated Time: 26-38 hours** *(Updated)*
 
-- **Phase 1-2 (Dependencies & Data Structures)**: 3-5 hours
-- **Phase 3 (Input Parsing)**: 2-3 hours  
-- **Phase 4 (Database Integration)**: 4-5 hours
+- **Phase 1-2 (Dependencies & Data Structures)**: ✅ 3-5 hours *(COMPLETED)*
+- **Phase 3 (Input Parsing)**: ✅ 2-3 hours *(COMPLETED)*
+- **Phase 4 (Database Integration)**: 6-8 hours *(Updated - more comprehensive)*
 - **Phase 5 (CLI Updates)**: 1-2 hours
 - **Phase 6 (Processing Logic)**: 3-4 hours
 - **Phase 7 (Output Format)**: 2-3 hours
 - **Phase 8 (Testing)**: 4-6 hours
 - **Phase 9 (Documentation)**: 2-3 hours
 - **Phase 10 (Deployment)**: 1 hour
+
+**Remaining Estimated Time: ~20-30 hours**
 
 ## Dependencies
 
