@@ -20,8 +20,18 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta
 from functools import wraps
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple, NamedTuple, Callable, Any
+from typing import Dict, List, Optional, Tuple, Callable, Any
 from urllib.parse import urlparse
+
+# Import data models
+from .models import (
+    ArtistData,
+    ParseResult,
+    ApiResponse,
+    DatabaseConfig,
+    DatabaseResult,
+    ProcessingStats,
+)
 
 try:
     import psycopg3
@@ -79,68 +89,6 @@ DEFAULT_POOL_SIZE = 4  # Match default worker count
 DEFAULT_MAX_OVERFLOW = 8  # Allow burst connections
 DEFAULT_CONNECTION_TIMEOUT = 30  # seconds
 DEFAULT_QUERY_TIMEOUT = 60  # seconds
-
-
-class ArtistData(NamedTuple):
-    """Represents parsed artist data from input file."""
-
-    artist_id: str  # UUID string
-    name: str
-    data: Optional[str] = None
-
-
-class ParseResult(NamedTuple):
-    """Result of parsing an input file."""
-
-    artists: List[ArtistData]
-    skipped_lines: int
-    error_lines: int
-
-
-class ApiResponse(NamedTuple):
-    """Result of an OpenAI API call."""
-
-    artist_id: str  # UUID string
-    artist_name: str
-    artist_data: Optional[str]
-    response_text: str
-    response_id: str
-    created: int
-    db_status: Optional[str] = None  # "updated|skipped|error|null"
-    error: Optional[str] = None
-
-
-class DatabaseConfig(NamedTuple):
-    """Database configuration settings."""
-
-    url: str
-    pool_size: int = 4  # Match default worker count
-    max_overflow: int = 8  # Allow burst connections
-    connection_timeout: int = 30  # seconds
-    query_timeout: int = 60  # seconds
-
-
-class DatabaseResult(NamedTuple):
-    """Result of a database operation."""
-
-    success: bool
-    rows_affected: int
-    error: Optional[str] = None
-
-
-class ProcessingStats(NamedTuple):
-    """Statistics for processing operations."""
-
-    total_artists: int
-    successful_calls: int
-    failed_calls: int
-    skipped_lines: int
-    error_lines: int
-    start_time: float
-    end_time: float
-    total_duration: float
-    avg_time_per_artist: float
-    api_calls_per_second: float
 
 
 # Database Connection Management Functions
