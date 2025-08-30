@@ -14,10 +14,7 @@ import unittest
 from io import StringIO
 from unittest.mock import patch, MagicMock
 
-# Add the current directory to the path so we can import run_artists
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-
-import run_artists
+from artist_bio_gen import main as run_artists
 
 
 class TestProcessingStats(unittest.TestCase):

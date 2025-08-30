@@ -10,7 +10,7 @@ import os
 import unittest
 from unittest.mock import patch, MagicMock
 
-import run_artists
+from artist_bio_gen import main as run_artists
 
 
 class TestDatabaseUrlValidation(unittest.TestCase):

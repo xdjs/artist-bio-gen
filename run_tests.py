@@ -26,28 +26,30 @@ def discover_and_run_tests():
     loader = unittest.TestLoader()
     start_dir = str(test_dir)
     
-    # Find all test files
+    # Find all test files recursively
     test_files = []
-    for file in test_dir.glob('test_*.py'):
-        test_files.append(file.stem)
+    for file in test_dir.rglob('test_*.py'):
+        # Convert path to module name (e.g., tests/core/test_input_parser.py -> tests.core.test_input_parser)
+        relative_path = file.relative_to(script_dir)
+        module_name = str(relative_path.with_suffix('')).replace('/', '.')
+        test_files.append(module_name)
     
-    print(f"Found test files: {test_files}")
+    print(f"Found test files: {[f.split('.')[-1] for f in test_files]}")
     
-    # Add tests directory to Python path for imports
-    if str(test_dir) not in sys.path:
-        sys.path.insert(0, str(test_dir))
+    # Add project root to Python path for imports
+    if str(script_dir) not in sys.path:
+        sys.path.insert(0, str(script_dir))
     
     # Load tests from each file
     suite = unittest.TestSuite()
-    for test_file in test_files:
+    for module_name in test_files:
         try:
-            module_name = test_file
-            module = __import__(module_name)
+            module = __import__(module_name, fromlist=[''])
             tests = loader.loadTestsFromModule(module)
             suite.addTests(tests)
-            print(f"Loaded tests from {test_file}")
+            print(f"Loaded tests from {module_name.split('.')[-1]}")
         except ImportError as e:
-            print(f"Failed to import {test_file}: {e}")
+            print(f"Failed to import {module_name}: {e}")
             continue
     
     # Run the tests
