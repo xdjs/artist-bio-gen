@@ -14,7 +14,13 @@ from pathlib import Path
 def discover_and_run_tests():
     """Discover and run all tests in the project."""
     # Get the directory containing this script
-    test_dir = Path(__file__).parent
+    script_dir = Path(__file__).parent
+    test_dir = script_dir / 'tests'
+    
+    # Check if tests directory exists
+    if not test_dir.exists():
+        print(f"Tests directory not found: {test_dir}")
+        return False
     
     # Discover all test files
     loader = unittest.TestLoader()
@@ -26,6 +32,10 @@ def discover_and_run_tests():
         test_files.append(file.stem)
     
     print(f"Found test files: {test_files}")
+    
+    # Add tests directory to Python path for imports
+    if str(test_dir) not in sys.path:
+        sys.path.insert(0, str(test_dir))
     
     # Load tests from each file
     suite = unittest.TestSuite()
@@ -84,9 +94,18 @@ def run_specific_test_file(test_file):
     if not test_file.endswith('.py'):
         test_file += '.py'
     
-    if not os.path.exists(test_file):
-        print(f"Test file {test_file} not found")
+    # Check in tests directory first
+    script_dir = Path(__file__).parent
+    test_dir = script_dir / 'tests'
+    test_file_path = test_dir / test_file
+    
+    if not test_file_path.exists():
+        print(f"Test file {test_file} not found in {test_dir}")
         return False
+    
+    # Add tests directory to Python path for imports
+    if str(test_dir) not in sys.path:
+        sys.path.insert(0, str(test_dir))
     
     # Import and run the specific test file
     module_name = test_file[:-3]  # Remove .py extension
