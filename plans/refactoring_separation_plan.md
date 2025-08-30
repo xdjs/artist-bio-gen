@@ -33,13 +33,13 @@ Refactor the monolithic `run_artists.py` script into separate, focused modules f
 - ✅ Create `artist_bio_gen/utils/` (utilities and helpers)
 - ✅ Create `artist_bio_gen/models/` (data structures and models)
 
-#### Task 1.2: Update Project Root Structure
-- [ ] Move `run_artists.py` to `artist_bio_gen/main.py` (main entry point)
-- [ ] Create new `run_artists.py` as simple wrapper script at root
-- [ ] Update `requirements.txt` location and content
-- [ ] Move `example_artists.csv` to `examples/` directory
-- [ ] Create `setup.py` for package installation
-- [ ] Update `.env.example` location if needed
+#### Task 1.2: Update Project Root Structure ✅ **COMPLETED**
+- ✅ Move `run_artists.py` to `artist_bio_gen/main.py` (main entry point)
+- ✅ Create new `run_artists.py` as simple wrapper script at root
+- ✅ Update `requirements.txt` location and content (no changes needed)
+- ✅ Move `example_artists.csv` to `examples/` directory
+- ✅ Create `setup.py` for package installation
+- ✅ Update `.env.example` location if needed (no changes needed)
 
 #### Task 1.3: Update Test Structure
 - [ ] Reorganize `tests/` to mirror package structure

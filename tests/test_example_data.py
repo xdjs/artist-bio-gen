@@ -15,7 +15,7 @@ class TestExampleDataFile(unittest.TestCase):
     
     def setUp(self):
         """Set up test fixtures."""
-        self.example_file = 'example_artists.csv'
+        self.example_file = 'examples/example_artists.csv'
         self.assertTrue(os.path.exists(self.example_file), 
                        f"Example file {self.example_file} not found")
     
