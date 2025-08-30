@@ -23,32 +23,23 @@ class TestArtistData(unittest.TestCase):
     """Test cases for the ArtistData NamedTuple."""
     
     def test_artist_data_creation(self):
-        """Test creating ArtistData with artist_id and name only."""
-        artist = run_artists.ArtistData(
-            artist_id="550e8400-e29b-41d4-a716-446655440000",
-            name="Taylor Swift"
-        )
-        self.assertEqual(artist.artist_id, "550e8400-e29b-41d4-a716-446655440000")
+        """Test creating ArtistData with name only."""
+        artist = run_artists.ArtistData(name="Taylor Swift")
         self.assertEqual(artist.name, "Taylor Swift")
         self.assertIsNone(artist.data)
     
     def test_artist_data_with_data(self):
-        """Test creating ArtistData with artist_id, name and data."""
+        """Test creating ArtistData with name and data."""
         artist = run_artists.ArtistData(
-            artist_id="550e8400-e29b-41d4-a716-446655440000",
             name="Taylor Swift",
             data="Pop singer-songwriter"
         )
-        self.assertEqual(artist.artist_id, "550e8400-e29b-41d4-a716-446655440000")
         self.assertEqual(artist.name, "Taylor Swift")
         self.assertEqual(artist.data, "Pop singer-songwriter")
     
     def test_artist_data_immutable(self):
         """Test that ArtistData is immutable."""
-        artist = run_artists.ArtistData(
-            artist_id="550e8400-e29b-41d4-a716-446655440000",
-            name="Taylor Swift"
-        )
+        artist = run_artists.ArtistData(name="Taylor Swift")
         with self.assertRaises(AttributeError):
             artist.name = "Drake"
 
@@ -59,8 +50,8 @@ class TestParseResult(unittest.TestCase):
     def test_parse_result_creation(self):
         """Test creating ParseResult."""
         artists = [
-            run_artists.ArtistData(artist_id="11111111-1111-1111-1111-111111111111", name="Artist 1"),
-            run_artists.ArtistData(artist_id="22222222-2222-2222-2222-222222222222", name="Artist 2")
+            run_artists.ArtistData(name="Artist 1"),
+            run_artists.ArtistData(name="Artist 2")
         ]
         result = run_artists.ParseResult(
             artists=artists,
@@ -99,17 +90,15 @@ class TestParseInputFile(unittest.TestCase):
     
     def test_parse_simple_file(self):
         """Test parsing a simple file with valid data."""
-        content = """550e8400-e29b-41d4-a716-446655440000,Taylor Swift,Pop singer-songwriter
-11111111-1111-1111-1111-111111111111,Drake,Canadian rapper"""
+        content = """Taylor Swift,Pop singer-songwriter
+Drake,Canadian rapper"""
         temp_file = self.create_temp_file(content)
         
         result = run_artists.parse_input_file(temp_file)
         
         self.assertEqual(len(result.artists), 2)
-        self.assertEqual(result.artists[0].artist_id, "550e8400-e29b-41d4-a716-446655440000")
         self.assertEqual(result.artists[0].name, "Taylor Swift")
         self.assertEqual(result.artists[0].data, "Pop singer-songwriter")
-        self.assertEqual(result.artists[1].artist_id, "11111111-1111-1111-1111-111111111111")
         self.assertEqual(result.artists[1].name, "Drake")
         self.assertEqual(result.artists[1].data, "Canadian rapper")
         self.assertEqual(result.skipped_lines, 0)
@@ -118,9 +107,9 @@ class TestParseInputFile(unittest.TestCase):
     def test_parse_file_with_comments(self):
         """Test parsing a file with comment lines."""
         content = """# This is a comment
-550e8400-e29b-41d4-a716-446655440000,Taylor Swift,Pop singer-songwriter
+Taylor Swift,Pop singer-songwriter
 # Another comment
-11111111-1111-1111-1111-111111111111,Drake,Canadian rapper"""
+Drake,Canadian rapper"""
         temp_file = self.create_temp_file(content)
         
         result = run_artists.parse_input_file(temp_file)
