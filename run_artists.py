@@ -8,12 +8,14 @@ and uses the OpenAI Responses API to generate artist bios using reusable prompts
 
 import argparse
 import asyncio
+import csv
 import json
 import logging
 import os
 import random
 import sys
 import time
+import uuid
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta
 from functools import wraps
@@ -68,6 +70,7 @@ EXIT_UNEXPECTED_ERROR = 10
 class ArtistData(NamedTuple):
     """Represents parsed artist data from input file."""
 
+    artist_id: str  # UUID string
     name: str
     data: Optional[str] = None
 
@@ -83,11 +86,31 @@ class ParseResult(NamedTuple):
 class ApiResponse(NamedTuple):
     """Result of an OpenAI API call."""
 
+    artist_id: str  # UUID string
     artist_name: str
     artist_data: Optional[str]
     response_text: str
     response_id: str
     created: int
+    db_status: Optional[str] = None  # "updated|skipped|error|null"
+    error: Optional[str] = None
+
+
+class DatabaseConfig(NamedTuple):
+    """Database configuration settings."""
+
+    url: str
+    pool_size: int = 4  # Match default worker count
+    max_overflow: int = 8  # Allow burst connections
+    connection_timeout: int = 30  # seconds
+    query_timeout: int = 60  # seconds
+
+
+class DatabaseResult(NamedTuple):
+    """Result of a database operation."""
+
+    success: bool
+    rows_affected: int
     error: Optional[str] = None
 
 
@@ -106,15 +129,33 @@ class ProcessingStats(NamedTuple):
     api_calls_per_second: float
 
 
+def validate_uuid(uuid_string: str) -> bool:
+    """
+    Validate that a string is a valid UUID format.
+    
+    Args:
+        uuid_string: String to validate
+        
+    Returns:
+        True if valid UUID, False otherwise
+    """
+    try:
+        uuid.UUID(uuid_string)
+        return True
+    except (ValueError, TypeError):
+        return False
+
+
 def parse_input_file(file_path: str) -> ParseResult:
     """
-    Parse a CSV-like input file containing artist data.
+    Parse a CSV input file containing artist data.
 
-    Expected format: artist_name,artist_data
+    Expected format: artist_id,artist_name,artist_data
     - Lines starting with # are comments and will be skipped
     - Blank lines are skipped
-    - artist_name is required, artist_data is optional
-    - Whitespace is trimmed from both fields
+    - artist_id must be a valid UUID, artist_name is required, artist_data is optional
+    - Uses proper CSV parsing with quote-aware handling
+    - Optional header row is automatically detected and skipped
 
     Args:
         file_path: Path to the input file
@@ -129,30 +170,49 @@ def parse_input_file(file_path: str) -> ParseResult:
     artists = []
     skipped_lines = 0
     error_lines = 0
+    header_skipped = False
 
     try:
-        with open(file_path, "r", encoding="utf-8") as f:
-            for line_num, line in enumerate(f, 1):
-                line = line.strip()
-
+        with open(file_path, "r", encoding="utf-8", newline='') as f:
+            csv_reader = csv.reader(f)
+            
+            for line_num, row in enumerate(csv_reader, 1):
                 # Skip blank lines
-                if not line:
+                if not row or (len(row) == 1 and not row[0].strip()):
                     skipped_lines += 1
                     continue
 
-                # Skip comment lines
-                if line.startswith("#"):
+                # Skip comment lines (lines starting with #)
+                if row[0].strip().startswith("#"):
                     skipped_lines += 1
                     continue
 
-                # Parse the line
+                # Skip header row if it looks like a header
+                if not header_skipped and len(row) >= 2:
+                    first_field = row[0].strip().lower()
+                    if first_field in ['artist_id', 'id', 'uuid']:
+                        header_skipped = True
+                        skipped_lines += 1
+                        continue
+
+                # Parse the row
                 try:
-                    # Split on first comma only
-                    parts = line.split(",", 1)
-                    artist_name = parts[0].strip()
-                    artist_data = parts[1].strip() if len(parts) > 1 else None
+                    if len(row) < 2:
+                        logger.warning(f"Line {line_num}: Insufficient columns (need at least artist_id,artist_name), skipping")
+                        error_lines += 1
+                        continue
 
-                    # Validate artist name is not empty
+                    artist_id = row[0].strip()
+                    artist_name = row[1].strip()
+                    artist_data = row[2].strip() if len(row) > 2 else None
+
+                    # Validate artist_id is a valid UUID
+                    if not validate_uuid(artist_id):
+                        logger.warning(f"Line {line_num}: Invalid UUID format for artist_id '{artist_id}', skipping")
+                        error_lines += 1
+                        continue
+
+                    # Validate artist_name is not empty
                     if not artist_name:
                         logger.warning(f"Line {line_num}: Empty artist name, skipping")
                         error_lines += 1
@@ -160,12 +220,14 @@ def parse_input_file(file_path: str) -> ParseResult:
 
                     # Create artist data object
                     artist = ArtistData(
-                        name=artist_name, data=artist_data if artist_data else None
+                        artist_id=artist_id,
+                        name=artist_name, 
+                        data=artist_data if artist_data else None
                     )
                     artists.append(artist)
 
                 except Exception as e:
-                    logger.warning(f"Line {line_num}: Error parsing line '{line}': {e}")
+                    logger.warning(f"Line {line_num}: Error parsing line: {e}")
                     error_lines += 1
                     continue
 
@@ -178,7 +240,7 @@ def parse_input_file(file_path: str) -> ParseResult:
 
     logger.info(f"Parsed {len(artists)} artists from {file_path}")
     if skipped_lines > 0:
-        logger.info(f"Skipped {skipped_lines} comment/blank lines")
+        logger.info(f"Skipped {skipped_lines} comment/blank/header lines")
     if error_lines > 0:
         logger.warning(f"Encountered {error_lines} error lines")
 
