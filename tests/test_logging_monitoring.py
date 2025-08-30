@@ -303,8 +303,8 @@ class TestEnhancedMainFunction(unittest.TestCase):
     @patch('run_artists.create_openai_client')
     def test_main_function_enhanced_logging(self, mock_client, mock_logger):
         """Test that main function uses enhanced logging."""
-        content = """Taylor Swift,Pop singer-songwriter
-Drake,Canadian rapper"""
+        content = """550e8400-e29b-41d4-a716-446655440035,Taylor Swift,Pop singer-songwriter
+550e8400-e29b-41d4-a716-446655440036,Drake,Canadian rapper"""
         temp_file = self.create_temp_file(content)
         
         # Mock the OpenAI client and API response
@@ -348,7 +348,7 @@ Drake,Canadian rapper"""
     @patch('run_artists.logger')
     def test_main_function_verbose_flag(self, mock_logger):
         """Test that verbose flag is handled correctly."""
-        content = """Taylor Swift,Pop singer-songwriter"""
+        content = """550e8400-e29b-41d4-a716-446655440037,Taylor Swift,Pop singer-songwriter"""
         temp_file = self.create_temp_file(content)
         
         sys.argv = [

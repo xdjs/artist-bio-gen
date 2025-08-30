@@ -335,6 +335,7 @@ class TestJsonlOutput(unittest.TestCase):
         # Create test responses
         responses = [
             run_artists.ApiResponse(
+                artist_id="550e8400-e29b-41d4-a716-446655440005",
                 artist_name="Taylor Swift",
                 artist_data="Pop singer-songwriter",
                 response_text="Taylor Swift is a Grammy-winning pop artist...",
@@ -343,6 +344,7 @@ class TestJsonlOutput(unittest.TestCase):
                 error=None
             ),
             run_artists.ApiResponse(
+                artist_id="550e8400-e29b-41d4-a716-446655440006",
                 artist_name="Drake",
                 artist_data=None,
                 response_text="Drake is a Canadian rapper and singer...",
@@ -397,6 +399,7 @@ class TestJsonlOutput(unittest.TestCase):
         # Create test responses with errors
         responses = [
             run_artists.ApiResponse(
+                artist_id="550e8400-e29b-41d4-a716-446655440007",
                 artist_name="Failed Artist",
                 artist_data="Some data",
                 response_text="",
@@ -437,6 +440,7 @@ class TestJsonlOutput(unittest.TestCase):
         """Test writing JSONL output without version parameter."""
         responses = [
             run_artists.ApiResponse(
+                artist_id="550e8400-e29b-41d4-a716-446655440008",
                 artist_name="Test Artist",
                 artist_data=None,
                 response_text="Test response",
@@ -464,6 +468,7 @@ class TestJsonlOutput(unittest.TestCase):
         """Test writing JSONL output with UTF-8 characters."""
         responses = [
             run_artists.ApiResponse(
+                artist_id="550e8400-e29b-41d4-a716-446655440009",
                 artist_name="Björk",
                 artist_data="Icelandic singer-songwriter",
                 response_text="Björk is an Icelandic artist known for her experimental music...",

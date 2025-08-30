@@ -24,22 +24,25 @@ class TestArtistData(unittest.TestCase):
     
     def test_artist_data_creation(self):
         """Test creating ArtistData with name only."""
-        artist = run_artists.ArtistData(name="Taylor Swift")
+        artist = run_artists.ArtistData(artist_id="550e8400-e29b-41d4-a716-446655440000", name="Taylor Swift")
+        self.assertEqual(artist.artist_id, "550e8400-e29b-41d4-a716-446655440000")
         self.assertEqual(artist.name, "Taylor Swift")
         self.assertIsNone(artist.data)
     
     def test_artist_data_with_data(self):
         """Test creating ArtistData with name and data."""
         artist = run_artists.ArtistData(
+            artist_id="550e8400-e29b-41d4-a716-446655440001",
             name="Taylor Swift",
             data="Pop singer-songwriter"
         )
+        self.assertEqual(artist.artist_id, "550e8400-e29b-41d4-a716-446655440001")
         self.assertEqual(artist.name, "Taylor Swift")
         self.assertEqual(artist.data, "Pop singer-songwriter")
     
     def test_artist_data_immutable(self):
         """Test that ArtistData is immutable."""
-        artist = run_artists.ArtistData(name="Taylor Swift")
+        artist = run_artists.ArtistData(artist_id="550e8400-e29b-41d4-a716-446655440002", name="Taylor Swift")
         with self.assertRaises(AttributeError):
             artist.name = "Drake"
 
@@ -50,8 +53,8 @@ class TestParseResult(unittest.TestCase):
     def test_parse_result_creation(self):
         """Test creating ParseResult."""
         artists = [
-            run_artists.ArtistData(name="Artist 1"),
-            run_artists.ArtistData(name="Artist 2")
+            run_artists.ArtistData(artist_id="550e8400-e29b-41d4-a716-446655440003", name="Artist 1"),
+            run_artists.ArtistData(artist_id="550e8400-e29b-41d4-a716-446655440004", name="Artist 2")
         ]
         result = run_artists.ParseResult(
             artists=artists,
@@ -90,15 +93,17 @@ class TestParseInputFile(unittest.TestCase):
     
     def test_parse_simple_file(self):
         """Test parsing a simple file with valid data."""
-        content = """Taylor Swift,Pop singer-songwriter
-Drake,Canadian rapper"""
+        content = """550e8400-e29b-41d4-a716-446655440010,Taylor Swift,Pop singer-songwriter
+550e8400-e29b-41d4-a716-446655440011,Drake,Canadian rapper"""
         temp_file = self.create_temp_file(content)
         
         result = run_artists.parse_input_file(temp_file)
         
         self.assertEqual(len(result.artists), 2)
+        self.assertEqual(result.artists[0].artist_id, "550e8400-e29b-41d4-a716-446655440010")
         self.assertEqual(result.artists[0].name, "Taylor Swift")
         self.assertEqual(result.artists[0].data, "Pop singer-songwriter")
+        self.assertEqual(result.artists[1].artist_id, "550e8400-e29b-41d4-a716-446655440011")
         self.assertEqual(result.artists[1].name, "Drake")
         self.assertEqual(result.artists[1].data, "Canadian rapper")
         self.assertEqual(result.skipped_lines, 0)
@@ -107,9 +112,9 @@ Drake,Canadian rapper"""
     def test_parse_file_with_comments(self):
         """Test parsing a file with comment lines."""
         content = """# This is a comment
-Taylor Swift,Pop singer-songwriter
+550e8400-e29b-41d4-a716-446655440019,Taylor Swift,Pop singer-songwriter
 # Another comment
-Drake,Canadian rapper"""
+550e8400-e29b-41d4-a716-446655440020,Drake,Canadian rapper"""
         temp_file = self.create_temp_file(content)
         
         result = run_artists.parse_input_file(temp_file)
@@ -120,9 +125,9 @@ Drake,Canadian rapper"""
     
     def test_parse_file_with_blank_lines(self):
         """Test parsing a file with blank lines."""
-        content = """Taylor Swift,Pop singer-songwriter
+        content = """550e8400-e29b-41d4-a716-446655440021,Taylor Swift,Pop singer-songwriter
 
-Drake,Canadian rapper
+550e8400-e29b-41d4-a716-446655440022,Drake,Canadian rapper
 
 """
         temp_file = self.create_temp_file(content)
@@ -135,40 +140,45 @@ Drake,Canadian rapper
     
     def test_parse_file_with_optional_data(self):
         """Test parsing a file where some artists have no additional data."""
-        content = """Taylor Swift,Pop singer-songwriter
-Drake,
-Billie Eilish,Alternative pop artist"""
+        content = """550e8400-e29b-41d4-a716-446655440012,Taylor Swift,Pop singer-songwriter
+550e8400-e29b-41d4-a716-446655440013,Drake,
+550e8400-e29b-41d4-a716-446655440014,Billie Eilish,Alternative pop artist"""
         temp_file = self.create_temp_file(content)
         
         result = run_artists.parse_input_file(temp_file)
         
         self.assertEqual(len(result.artists), 3)
+        self.assertEqual(result.artists[0].artist_id, "550e8400-e29b-41d4-a716-446655440012")
         self.assertEqual(result.artists[0].name, "Taylor Swift")
         self.assertEqual(result.artists[0].data, "Pop singer-songwriter")
+        self.assertEqual(result.artists[1].artist_id, "550e8400-e29b-41d4-a716-446655440013")
         self.assertEqual(result.artists[1].name, "Drake")
         self.assertIsNone(result.artists[1].data)
+        self.assertEqual(result.artists[2].artist_id, "550e8400-e29b-41d4-a716-446655440014")
         self.assertEqual(result.artists[2].name, "Billie Eilish")
         self.assertEqual(result.artists[2].data, "Alternative pop artist")
     
     def test_parse_file_with_whitespace(self):
         """Test parsing a file with whitespace that should be trimmed."""
-        content = """  Taylor Swift  ,  Pop singer-songwriter  
-  Drake  ,  Canadian rapper  """
+        content = """  550e8400-e29b-41d4-a716-446655440015  ,  Taylor Swift  ,  Pop singer-songwriter  
+  550e8400-e29b-41d4-a716-446655440016  ,  Drake  ,  Canadian rapper  """
         temp_file = self.create_temp_file(content)
         
         result = run_artists.parse_input_file(temp_file)
         
         self.assertEqual(len(result.artists), 2)
+        self.assertEqual(result.artists[0].artist_id, "550e8400-e29b-41d4-a716-446655440015")
         self.assertEqual(result.artists[0].name, "Taylor Swift")
         self.assertEqual(result.artists[0].data, "Pop singer-songwriter")
+        self.assertEqual(result.artists[1].artist_id, "550e8400-e29b-41d4-a716-446655440016")
         self.assertEqual(result.artists[1].name, "Drake")
         self.assertEqual(result.artists[1].data, "Canadian rapper")
     
     def test_parse_file_with_empty_artist_name(self):
         """Test parsing a file with empty artist names."""
-        content = """Taylor Swift,Pop singer-songwriter
+        content = """550e8400-e29b-41d4-a716-446655440023,Taylor Swift,Pop singer-songwriter
 ,Empty artist name
-Drake,Canadian rapper"""
+550e8400-e29b-41d4-a716-446655440024,Drake,Canadian rapper"""
         temp_file = self.create_temp_file(content)
         
         with patch('run_artists.logger') as mock_logger:
@@ -181,15 +191,15 @@ Drake,Canadian rapper"""
     
     def test_parse_file_with_commas_in_data(self):
         """Test parsing a file where artist data contains commas."""
-        content = """Taylor Swift,"Pop singer-songwriter, known for autobiographical lyrics"
-Drake,Canadian rapper, singer, and producer"""
+        content = """550e8400-e29b-41d4-a716-446655440025,Taylor Swift,"Pop singer-songwriter, known for autobiographical lyrics"
+550e8400-e29b-41d4-a716-446655440026,Drake,"Canadian rapper, singer, and producer\""""
         temp_file = self.create_temp_file(content)
         
         result = run_artists.parse_input_file(temp_file)
         
         self.assertEqual(len(result.artists), 2)
         self.assertEqual(result.artists[0].name, "Taylor Swift")
-        self.assertEqual(result.artists[0].data, '"Pop singer-songwriter, known for autobiographical lyrics"')
+        self.assertEqual(result.artists[0].data, 'Pop singer-songwriter, known for autobiographical lyrics')
         self.assertEqual(result.artists[1].name, "Drake")
         self.assertEqual(result.artists[1].data, "Canadian rapper, singer, and producer")
     
@@ -237,25 +247,27 @@ Drake,Canadian rapper, singer, and producer"""
     
     def test_parse_file_utf8_support(self):
         """Test parsing a file with UTF-8 characters."""
-        content = """Björk,Icelandic singer-songwriter
-Sigur Rós,Icelandic post-rock band
+        content = """550e8400-e29b-41d4-a716-446655440032,Björk,Icelandic singer-songwriter
+550e8400-e29b-41d4-a716-446655440033,Sigur Rós,Icelandic post-rock band
 """
         temp_file = self.create_temp_file(content)
         
         result = run_artists.parse_input_file(temp_file)
         
         self.assertEqual(len(result.artists), 2)
+        self.assertEqual(result.artists[0].artist_id, "550e8400-e29b-41d4-a716-446655440032")
         self.assertEqual(result.artists[0].name, "Björk")
         self.assertEqual(result.artists[0].data, "Icelandic singer-songwriter")
+        self.assertEqual(result.artists[1].artist_id, "550e8400-e29b-41d4-a716-446655440033")
         self.assertEqual(result.artists[1].name, "Sigur Rós")
         self.assertEqual(result.artists[1].data, "Icelandic post-rock band")
     
     def test_parse_file_logging(self):
         """Test that parsing logs appropriate messages."""
         content = """# Comment
-Taylor Swift,Pop singer-songwriter
+550e8400-e29b-41d4-a716-446655440027,Taylor Swift,Pop singer-songwriter
 
-Drake,Canadian rapper
+550e8400-e29b-41d4-a716-446655440028,Drake,Canadian rapper
 ,Empty name"""
         temp_file = self.create_temp_file(content)
         
@@ -273,26 +285,29 @@ Drake,Canadian rapper
     
     def test_parse_file_with_tabs_and_spaces(self):
         """Test parsing a file with various whitespace characters."""
-        content = """Taylor Swift\t,Pop singer-songwriter
-  Drake  ,  Canadian rapper  """
+        content = """550e8400-e29b-41d4-a716-446655440017,Taylor Swift\t,Pop singer-songwriter
+  550e8400-e29b-41d4-a716-446655440018  ,  Drake  ,  Canadian rapper  """
         temp_file = self.create_temp_file(content)
         
         result = run_artists.parse_input_file(temp_file)
         
         self.assertEqual(len(result.artists), 2)
+        self.assertEqual(result.artists[0].artist_id, "550e8400-e29b-41d4-a716-446655440017")
         self.assertEqual(result.artists[0].name, "Taylor Swift")
         self.assertEqual(result.artists[0].data, "Pop singer-songwriter")
+        self.assertEqual(result.artists[1].artist_id, "550e8400-e29b-41d4-a716-446655440018")
         self.assertEqual(result.artists[1].name, "Drake")
         self.assertEqual(result.artists[1].data, "Canadian rapper")
     
     def test_parse_file_single_artist_no_data(self):
         """Test parsing a file with a single artist and no data field."""
-        content = """Taylor Swift"""
+        content = """550e8400-e29b-41d4-a716-446655440034,Taylor Swift"""
         temp_file = self.create_temp_file(content)
         
         result = run_artists.parse_input_file(temp_file)
         
         self.assertEqual(len(result.artists), 1)
+        self.assertEqual(result.artists[0].artist_id, "550e8400-e29b-41d4-a716-446655440034")
         self.assertEqual(result.artists[0].name, "Taylor Swift")
         self.assertIsNone(result.artists[0].data)
 
@@ -321,9 +336,9 @@ class TestMainFunctionWithParser(unittest.TestCase):
     @patch('run_artists.logger')
     def test_main_function_dry_run(self, mock_logger):
         """Test main function with dry run mode."""
-        content = """Taylor Swift,Pop singer-songwriter
-Drake,Canadian rapper
-Billie Eilish,Alternative pop artist"""
+        content = """550e8400-e29b-41d4-a716-446655440029,Taylor Swift,Pop singer-songwriter
+550e8400-e29b-41d4-a716-446655440030,Drake,Canadian rapper
+550e8400-e29b-41d4-a716-446655440031,Billie Eilish,Alternative pop artist"""
         temp_file = self.create_temp_file(content)
         
         sys.argv = ['run_artists.py', '--input-file', temp_file, '--prompt-id', 'test_prompt', '--dry-run']

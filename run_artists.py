@@ -432,6 +432,7 @@ def call_openai_api(
         duration = end_time - start_time
 
         api_response = ApiResponse(
+            artist_id=artist.artist_id,
             artist_name=artist.name,
             artist_data=artist.data,
             response_text=response_text,
@@ -453,6 +454,7 @@ def call_openai_api(
         error_msg = f"API call failed for artist '{artist.name}' [{exc_name}]: {str(e)}"
 
         api_response = ApiResponse(
+            artist_id=artist.artist_id,
             artist_name=artist.name,
             artist_data=artist.data,
             response_text="",
@@ -716,6 +718,7 @@ def process_artists_concurrent(
                 error_msg = f"Concurrent processing error [{exc_name}]: {str(e)}"
 
                 error_response = ApiResponse(
+                    artist_id=artist.artist_id,
                     artist_name=artist.name,
                     artist_data=artist.data,
                     response_text="",

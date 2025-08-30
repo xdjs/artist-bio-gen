@@ -102,8 +102,13 @@ class TestExampleDataFile(unittest.TestCase):
         for line in lines:
             line = line.strip()
             if line and not line.startswith('#'):
-                parts = line.split(',', 1)
-                if len(parts) == 2 and parts[1].strip() == '':
+                parts = line.split(',')
+                # Format: artist_id,artist_name,artist_data
+                if len(parts) >= 3 and parts[2].strip() == '':
+                    found_empty_data = True
+                    break
+                # Also check for lines ending with comma (no third part)
+                elif len(parts) == 2 and line.endswith(','):
                     found_empty_data = True
                     break
         
