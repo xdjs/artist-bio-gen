@@ -409,6 +409,8 @@ def apply_environment_defaults(args):
     """Apply environment variable defaults to parsed arguments."""
     if args.prompt_id is None:
         args.prompt_id = os.getenv("OPENAI_PROMPT_ID")
+    if not hasattr(args, 'db_url') or args.db_url is None:
+        args.db_url = os.getenv("DATABASE_URL")
     return args
 
 

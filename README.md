@@ -18,6 +18,7 @@ A Python script that uses the OpenAI Responses API to generate artist biographie
 - Python 3.11+
 - OpenAI API key
 - Valid OpenAI prompt ID
+- PostgreSQL database (for bio persistence)
 
 ## 🛠️ Installation
 
@@ -31,12 +32,24 @@ A Python script that uses the OpenAI Responses API to generate artist biographie
    ```bash
    export OPENAI_API_KEY="your-api-key-here"
    export OPENAI_PROMPT_ID="your-prompt-id-here"  # Optional
+   export DATABASE_URL="postgresql://username:password@localhost:5432/artist_bios"
    ```
 
    Or create a `.env.local` file:
    ```
    OPENAI_API_KEY=your-api-key-here
    OPENAI_PROMPT_ID=your-prompt-id-here
+   DATABASE_URL=postgresql://username:password@localhost:5432/artist_bios
+   ```
+
+4. **Set up PostgreSQL database:**
+   ```sql
+   CREATE DATABASE artist_bios;
+   CREATE TABLE artists (
+     id UUID PRIMARY KEY,
+     name TEXT NOT NULL,
+     bio TEXT
+   );
    ```
 
 ## 📖 Usage
@@ -196,6 +209,7 @@ artist-bio-gen/
 - `aiohttp>=3.8.0` - For async HTTP requests
 - `tenacity>=8.0.0` - For retry logic
 - `python-dotenv>=1.0.0` - Environment variable management
+- `psycopg3[binary]>=3.1.0` - PostgreSQL database adapter
 
 **Development Dependencies:**
 - `pytest>=7.0.0` - Testing framework
