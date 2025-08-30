@@ -2,7 +2,7 @@
 
 ## Project Structure & Module Organization
 - Root scripts: `run_artists.py` (CLI/main), `run_tests.py` (test runner).
-- Tests: `test_*.py` files in the repo root (CLI, parsing, logging, data checks).
+- Tests: `tests/` directory with `test_*.py` files (CLI, parsing, logging, data checks).
 - Assets: `example_artists.csv` sample input.
 - Config: `.env.example` (template), `.env.local` (secrets, ignored by Git).
 - Dependencies: `requirements.txt` (runtime + dev tools).
@@ -11,7 +11,7 @@
 - Install: `pip install -r requirements.txt`
 - Run locally: `python3 run_artists.py --input-file example_artists.csv --prompt-id <id>`
 - All tests: `python3 run_tests.py`
-- Single test file: `python3 test_run_artists.py`
+- Single test file: `python3 run_tests.py test_run_artists.py`
 - Format: `black .`
 - Type check: `mypy run_artists.py`
 
@@ -24,12 +24,12 @@
 
 ## Testing Guidelines
 - Framework: `unittest` via `run_tests.py` (no network in tests).
-- Naming: place tests in root as `test_*.py`; mirror feature names.
+- Naming: place tests in `tests/` as `test_*.py`; mirror feature names.
 - Add tests for new flags/parsing, logging output, and error paths.
 - Running examples:
-  - `python3 test_input_parser.py`
-  - `python3 test_logging_monitoring.py`
-  - `python3 test_run_artists.py`
+  - `python3 run_tests.py test_input_parser.py`
+  - `python3 run_tests.py test_logging_monitoring.py`
+  - `python3 run_tests.py test_run_artists.py`
 
 ## Commit & Pull Request Guidelines
 - Commits: follow Conventional Commits (e.g., `feat:`, `fix:`, `docs:`).

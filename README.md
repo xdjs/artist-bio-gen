@@ -179,10 +179,10 @@ Run the comprehensive test suite:
 python3 run_tests.py
 
 # Run specific test categories
-python3 test_input_parser.py      # Input parsing tests
-python3 test_logging_monitoring.py # Logging and monitoring tests
-python3 test_run_artists.py       # CLI and main function tests
-python3 test_example_data.py      # Example data validation tests
+python3 run_tests.py test_input_parser.py       # Input parsing tests
+python3 run_tests.py test_logging_monitoring.py # Logging and monitoring tests
+python3 run_tests.py test_run_artists.py        # CLI and main function tests
+python3 run_tests.py test_example_data.py       # Data validation tests
 ```
 
 ## 📁 Project Structure
@@ -193,11 +193,12 @@ artist-bio-gen/
 ├── requirements.txt            # Python dependencies
 ├── example_artists.csv         # Example input file
 ├── README.md                   # This file
-├── run_tests.py               # Test runner
-├── test_input_parser.py       # Input parsing tests
-├── test_logging_monitoring.py # Logging tests
-├── test_run_artists.py        # CLI tests
-└── test_example_data.py       # Data validation tests
+├── run_tests.py                # Test runner
+└── tests/                      # Test suite
+    ├── test_input_parser.py       # Input parsing tests
+    ├── test_logging_monitoring.py # Logging tests
+    ├── test_run_artists.py        # CLI tests
+    └── test_example_data.py       # Data validation tests
 ```
 
 ## 🔧 Development
