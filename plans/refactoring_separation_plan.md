@@ -59,10 +59,10 @@ Refactor the monolithic `run_artists.py` script into separate, focused modules f
 - ✅ Create `artist_bio_gen/models/stats.py` (ProcessingStats)
 - ✅ Add proper docstrings and type hints to all models
 
-#### Task 2.2: Extract Constants
-- [ ] Create `artist_bio_gen/constants.py`
-- [ ] Move exit codes, defaults, and configuration constants
-- [ ] Export constants through package `__init__.py`
+#### Task 2.2: Extract Constants ✅ **COMPLETED**
+- ✅ Create `artist_bio_gen/constants.py`
+- ✅ Move exit codes, defaults, and configuration constants
+- ✅ Export constants through package `__init__.py`
 
 ### Phase 3: Database Module Separation
 **Priority: High | Estimated Time: 2-3 hours**

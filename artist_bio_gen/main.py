@@ -33,6 +33,20 @@ from .models import (
     ProcessingStats,
 )
 
+# Import constants
+from .constants import (
+    EXIT_SUCCESS,
+    EXIT_INPUT_ERROR,
+    EXIT_CONFIG_ERROR,
+    EXIT_API_FAILURES,
+    EXIT_INTERRUPTED,
+    EXIT_UNEXPECTED_ERROR,
+    DEFAULT_POOL_SIZE,
+    DEFAULT_MAX_OVERFLOW,
+    DEFAULT_CONNECTION_TIMEOUT,
+    DEFAULT_QUERY_TIMEOUT,
+)
+
 try:
     import psycopg3
     from psycopg3 import pool
@@ -74,21 +88,6 @@ except ImportError:
         "OpenAI package not installed. Please install with: pip install openai"
     )
     sys.exit(3)
-
-
-# Exit codes for different failure modes
-EXIT_SUCCESS = 0
-EXIT_INPUT_ERROR = 2
-EXIT_CONFIG_ERROR = 3
-EXIT_API_FAILURES = 4
-EXIT_INTERRUPTED = 130  # Conventional exit code for Ctrl+C
-EXIT_UNEXPECTED_ERROR = 10
-
-# Database connection pool constants
-DEFAULT_POOL_SIZE = 4  # Match default worker count
-DEFAULT_MAX_OVERFLOW = 8  # Allow burst connections
-DEFAULT_CONNECTION_TIMEOUT = 30  # seconds
-DEFAULT_QUERY_TIMEOUT = 60  # seconds
 
 
 # Database Connection Management Functions
