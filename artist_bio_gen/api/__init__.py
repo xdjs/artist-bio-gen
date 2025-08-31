@@ -1,9 +1,32 @@
 #!/usr/bin/env python3
 """
-API Operations Module
+API package for artist bio generator.
 
-This module handles all OpenAI API interactions including client creation,
-request handling, and response processing.
+This package provides OpenAI API client management, operations,
+and utilities for the artist bio generator application.
 """
 
-__all__ = []
+from .client import (
+    create_openai_client,
+)
+
+from .operations import (
+    call_openai_api,
+)
+
+from .utils import (
+    should_retry_error,
+    calculate_retry_delay,
+    retry_with_exponential_backoff,
+)
+
+__all__ = [
+    # Client management
+    "create_openai_client",
+    # Operations
+    "call_openai_api",
+    # Utilities
+    "should_retry_error",
+    "calculate_retry_delay",
+    "retry_with_exponential_backoff",
+]

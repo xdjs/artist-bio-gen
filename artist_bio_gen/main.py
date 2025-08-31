@@ -57,10 +57,24 @@ from .database import (
     get_database_url_from_env,
     update_artist_bio,
     get_table_name,
-    retry_with_exponential_backoff,
     classify_database_error,
     validate_uuid,
 )
+
+# Import API functions
+from .api import (
+    create_openai_client,
+    call_openai_api,
+    should_retry_error,
+    calculate_retry_delay,
+    retry_with_exponential_backoff,
+)
+
+# Import OpenAI for type annotations
+try:
+    from openai import OpenAI
+except ImportError:
+    OpenAI = None
 
 try:
     import psycopg3
@@ -94,16 +108,6 @@ def setup_logging(verbose: bool = False):
 
 setup_logging()
 logger = logging.getLogger("__main__")
-
-# OpenAI client
-try:
-    from openai import OpenAI
-except ImportError:
-    logger.error(
-        "OpenAI package not installed. Please install with: pip install openai"
-    )
-    sys.exit(3)
-
 
 # Input Parsing Functions
 
@@ -211,260 +215,7 @@ def parse_input_file(file_path: str) -> ParseResult:
     )
 
 
-def create_openai_client() -> OpenAI:
-    """Create and initialize OpenAI client."""
-    api_key = os.getenv("OPENAI_API_KEY")
-    if not api_key:
-        logger.error("OPENAI_API_KEY environment variable not set")
-        sys.exit(EXIT_CONFIG_ERROR)
-
-    client = OpenAI(api_key=api_key)
-    logger.info("OpenAI client initialized successfully")
-    return client
-
-
-def should_retry_error(exception: Exception) -> bool:
-    """
-    Determine if an error should trigger a retry.
-
-    Args:
-        exception: The exception that occurred
-
-    Returns:
-        True if the error should be retried, False otherwise
-    """
-    # Import OpenAI exceptions locally to avoid import issues
-    try:
-        from openai import (
-            RateLimitError,
-            InternalServerError,
-            APITimeoutError,
-            APIConnectionError,
-        )
-    except ImportError:
-        # Fallback for different OpenAI versions
-        return False
-
-    # Retry on these specific OpenAI errors
-    if isinstance(
-        exception,
-        (RateLimitError, InternalServerError, APITimeoutError, APIConnectionError),
-    ):
-        return True
-
-    # Retry on network-related errors
-    if isinstance(exception, (ConnectionError, TimeoutError, OSError)):
-        return True
-
-    # Don't retry on client errors (4xx) or other exceptions
-    return False
-
-
-def calculate_retry_delay(
-    attempt: int, base_delay: float = 0.5, max_delay: float = 4.0
-) -> float:
-    """
-    Calculate exponential backoff delay with jitter.
-
-    Args:
-        attempt: Current attempt number (0-based)
-        base_delay: Base delay in seconds
-        max_delay: Maximum delay in seconds
-
-    Returns:
-        Delay in seconds with jitter
-    """
-    # Exponential backoff: 0.5s, 1s, 2s, 4s
-    delay = min(base_delay * (2**attempt), max_delay)
-
-    # Add jitter (±25% of the delay)
-    jitter = delay * 0.25 * (2 * random.random() - 1)
-
-    return max(0.1, delay + jitter)  # Minimum 0.1s delay
-
-
-def retry_with_exponential_backoff(
-    max_retries: int = 5,
-    base_delay: float = 0.5,
-    max_delay: float = 4.0,
-):
-    """
-    Decorator for retrying functions with exponential backoff.
-
-    Args:
-        max_retries: Maximum number of retry attempts
-        base_delay: Base delay for exponential backoff
-        max_delay: Maximum delay between retries
-    """
-
-    def decorator(func: Callable) -> Callable:
-        @wraps(func)
-        def wrapper(*args, **kwargs) -> Any:
-            # Extract worker_id from kwargs or use default
-            worker_id = kwargs.get("worker_id", "main")
-            last_exception = None
-
-            for attempt in range(max_retries + 1):  # +1 for initial attempt
-                try:
-                    return func(*args, **kwargs)
-                except Exception as e:
-                    last_exception = e
-
-                    # Don't retry on the last attempt
-                    if attempt == max_retries:
-                        logger.error(
-                            f"[{worker_id}] Final attempt failed after {max_retries} retries: {type(e).__name__}: {str(e)}"
-                        )
-                        break
-
-                    # Check if this error should be retried
-                    if not should_retry_error(e):
-                        logger.error(
-                            f"[{worker_id}] Non-retryable error on attempt {attempt + 1}: {type(e).__name__}: {str(e)}"
-                        )
-                        break
-
-                    # Calculate delay and wait
-                    delay = calculate_retry_delay(attempt, base_delay, max_delay)
-                    logger.warning(
-                        f"[{worker_id}] Attempt {attempt + 1} failed ({type(e).__name__}), retrying in {delay:.2f}s: {str(e)}"
-                    )
-                    time.sleep(delay)
-
-            # If we get here, all retries failed
-            raise last_exception
-
-        return wrapper
-
-    return decorator
-
-
-@retry_with_exponential_backoff(max_retries=5, base_delay=0.5, max_delay=4.0)
-def call_openai_api(
-    client: OpenAI,
-    artist: ArtistData,
-    prompt_id: str,
-    version: Optional[str] = None,
-    worker_id: str = "main",
-    db_connection: Optional["psycopg3.Connection"] = None,
-    skip_existing: bool = False,
-    test_mode: bool = False,
-) -> Tuple[ApiResponse, float]:
-    """
-    Make an API call to OpenAI Responses API for a single artist and optionally update database.
-
-    Args:
-        client: Initialized OpenAI client
-        artist: Artist data to process
-        prompt_id: OpenAI prompt ID
-        version: Optional prompt version
-        worker_id: Unique identifier for the worker thread
-        db_connection: Database connection for writing bio (optional)
-        skip_existing: If True, skip database update if bio already exists
-        test_mode: If True, use test database table
-
-    Returns:
-        Tuple of (ApiResponse with the result or error information, duration in seconds)
-    """
-    start_time = time.time()
-
-    # Log start of processing
-    logger.info(f"[{worker_id}] 🚀 Starting processing: {artist.name}")
-
-    try:
-        # Build variables dictionary
-        variables = {
-            "artist_name": artist.name,
-            "artist_data": (
-                artist.data if artist.data else "No additional data provided"
-            ),
-        }
-
-        # Build prompt configuration
-        prompt_config = {"id": prompt_id, "variables": variables}
-        if version:
-            prompt_config["version"] = version
-
-        logger.debug(f"[{worker_id}] Calling API for artist: {artist.name}")
-
-        # Make the API call
-        response = client.responses.create(prompt=prompt_config)
-
-        # Extract response data
-        response_text = response.output_text
-        response_id = response.id
-        created = int(response.created_at)
-
-        # Calculate timing
-        end_time = time.time()
-        duration = end_time - start_time
-
-        # Attempt database write if connection provided
-        db_status = "null"  # Default status when no database operation
-        if db_connection is not None:
-            try:
-                db_result = update_artist_bio(
-                    connection=db_connection,
-                    artist_id=artist.artist_id,
-                    bio=response_text,
-                    skip_existing=skip_existing,
-                    test_mode=test_mode,
-                    worker_id=worker_id
-                )
-                
-                if db_result.success:
-                    if db_result.rows_affected > 0:
-                        db_status = "updated"
-                        logger.debug(f"[{worker_id}] 💾 Database updated for {artist.name}")
-                    else:
-                        db_status = "skipped"
-                        logger.debug(f"[{worker_id}] ⏭️ Database update skipped for {artist.name}")
-                else:
-                    db_status = "error"
-                    logger.warning(f"[{worker_id}] 💥 Database update failed for {artist.name}: {db_result.error}")
-                    
-            except Exception as db_error:
-                db_status = "error"
-                logger.error(f"[{worker_id}] 💥 Database update error for {artist.name}: {str(db_error)}")
-
-        api_response = ApiResponse(
-            artist_id=artist.artist_id,
-            artist_name=artist.name,
-            artist_data=artist.data,
-            response_text=response_text,
-            response_id=response_id,
-            created=created,
-            db_status=db_status,
-        )
-
-        logger.info(
-            f"[{worker_id}] ✅ Completed processing: {artist.name} ({duration:.2f}s) [DB: {db_status}]"
-        )
-        return api_response, duration
-
-    except Exception as e:
-        # Calculate timing even for errors
-        end_time = time.time()
-        duration = end_time - start_time
-
-        exc_name = type(e).__name__
-        error_msg = f"API call failed for artist '{artist.name}' [{exc_name}]: {str(e)}"
-
-        api_response = ApiResponse(
-            artist_id=artist.artist_id,
-            artist_name=artist.name,
-            artist_data=artist.data,
-            response_text="",
-            response_id="",
-            created=0,
-            db_status="null",  # No database operation on API error
-            error=error_msg,
-        )
-
-        logger.error(
-            f"[{worker_id}] ❌ Failed processing: {artist.name} ({duration:.2f}s) - {error_msg}"
-        )
-        return api_response, duration
+# CLI Utility Functions
 
 
 def apply_environment_defaults(args):
