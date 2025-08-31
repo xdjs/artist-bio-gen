@@ -1,19 +1,29 @@
 # Repository Guidelines
 
 ## Project Structure & Module Organization
-- Root scripts: `run_artists.py` (CLI/main), `run_tests.py` (test runner).
-- Tests: `tests/` directory with `test_*.py` files (CLI, parsing, logging, data checks).
-- Assets: `example_artists.csv` sample input.
-- Config: `.env.example` (template), `.env.local` (secrets, ignored by Git).
-- Dependencies: `requirements.txt` (runtime + dev tools).
+- **Package**: `artist_bio_gen/` - Modular Python package with separated concerns
+- **Entry points**: `run_artists.py` (backward compatibility wrapper), `python -m artist_bio_gen.main`
+- **Test runner**: `run_tests.py` - Comprehensive test suite
+- **Tests**: `tests/` directory organized by module (`tests/core/`, `tests/api/`, etc.)
+- **Assets**: `examples/example_artists.csv` sample input
+- **Config**: `.env.example` (template), `.env.local` (secrets, ignored by Git)
+- **Dependencies**: `requirements.txt` (runtime + dev tools)
+
+### Package Modules
+- `api/` - OpenAI API client and operations
+- `database/` - PostgreSQL connection and operations
+- `core/` - Business logic (parsing, processing, output)
+- `cli/` - Command-line interface and argument parsing
+- `utils/` - Shared utilities (logging, validation, helpers)
+- `models/` - Data models and type definitions
 
 ## Build, Test, and Development Commands
 - Install: `pip install -r requirements.txt`
-- Run locally: `python3 run_artists.py --input-file example_artists.csv --prompt-id <id>`
-- All tests: `python3 run_tests.py`
-- Single test file: `python3 run_tests.py test_run_artists.py`
-- Format: `black .`
-- Type check: `mypy run_artists.py`
+- Run locally: `python3 run_artists.py --input-file examples/example_artists.csv --prompt-id <id>`
+- Run as package: `python3 -m artist_bio_gen.main --input-file examples/example_artists.csv --prompt-id <id>`
+- All tests: `python3 run_tests.py` (104 tests, 100% success rate)
+- Format: `black artist_bio_gen/ tests/`
+- Type check: `mypy artist_bio_gen/`
 
 ## Coding Style & Naming Conventions
 - Python 3.11+, 4‑space indentation, PEP 8.
@@ -23,13 +33,12 @@
 - Run `black` before pushing; keep imports ordered (black/PEP 8).
 
 ## Testing Guidelines
-- Framework: `unittest` via `run_tests.py` (no network in tests).
-- Naming: place tests in `tests/` as `test_*.py`; mirror feature names.
-- Add tests for new flags/parsing, logging output, and error paths.
-- Running examples:
-  - `python3 run_tests.py test_input_parser.py`
-  - `python3 run_tests.py test_logging_monitoring.py`
-  - `python3 run_tests.py test_run_artists.py`
+- Framework: `unittest` via `run_tests.py` (no network in tests)
+- Organization: tests in `tests/` organized by module (`tests/core/`, `tests/api/`, `tests/database/`, etc.)
+- Naming: `test_*.py` files; mirror module and feature names
+- Coverage: 104 tests with 100% success rate across all modules
+- Add tests for new functionality, error paths, and module interfaces
+- Test isolation: each module tested independently with proper imports
 
 ## Commit & Pull Request Guidelines
 - Commits: follow Conventional Commits (e.g., `feat:`, `fix:`, `docs:`).

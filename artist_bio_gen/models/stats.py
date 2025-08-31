@@ -12,7 +12,7 @@ from typing import NamedTuple
 class ProcessingStats(NamedTuple):
     """
     Statistics for processing operations.
-    
+
     Attributes:
         total_artists: Total number of artists to process
         successful_calls: Number of successful API calls
@@ -25,7 +25,7 @@ class ProcessingStats(NamedTuple):
         avg_time_per_artist: Average processing time per artist
         api_calls_per_second: API calls per second rate
     """
-    
+
     total_artists: int
     successful_calls: int
     failed_calls: int

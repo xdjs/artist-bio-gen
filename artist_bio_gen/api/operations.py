@@ -93,23 +93,31 @@ def call_openai_api(
                     bio=response_text,
                     skip_existing=skip_existing,
                     test_mode=test_mode,
-                    worker_id=worker_id
+                    worker_id=worker_id,
                 )
-                
+
                 if db_result.success:
                     if db_result.rows_affected > 0:
                         db_status = "updated"
-                        logger.debug(f"[{worker_id}] 💾 Database updated for {artist.name}")
+                        logger.debug(
+                            f"[{worker_id}] 💾 Database updated for {artist.name}"
+                        )
                     else:
                         db_status = "skipped"
-                        logger.debug(f"[{worker_id}] ⏭️ Database update skipped for {artist.name}")
+                        logger.debug(
+                            f"[{worker_id}] ⏭️ Database update skipped for {artist.name}"
+                        )
                 else:
                     db_status = "error"
-                    logger.warning(f"[{worker_id}] 💥 Database update failed for {artist.name}: {db_result.error}")
-                    
+                    logger.warning(
+                        f"[{worker_id}] 💥 Database update failed for {artist.name}: {db_result.error}"
+                    )
+
             except Exception as db_error:
                 db_status = "error"
-                logger.error(f"[{worker_id}] 💥 Database update error for {artist.name}: {str(db_error)}")
+                logger.error(
+                    f"[{worker_id}] 💥 Database update error for {artist.name}: {str(db_error)}"
+                )
 
         api_response = ApiResponse(
             artist_id=artist.artist_id,

@@ -12,7 +12,7 @@ from typing import Optional, NamedTuple
 class ApiResponse(NamedTuple):
     """
     Result of an OpenAI API call.
-    
+
     Attributes:
         artist_id: UUID string identifying the artist
         artist_name: Name of the artist processed
@@ -23,7 +23,7 @@ class ApiResponse(NamedTuple):
         db_status: Database write status ("updated|skipped|error|null")
         error: Error message if the API call failed
     """
-    
+
     artist_id: str  # UUID string
     artist_name: str
     artist_data: Optional[str]

@@ -11,6 +11,7 @@ import logging
 # Load environment variables from .env.local file
 try:
     from dotenv import load_dotenv
+
     load_dotenv(".env.local")
 except ImportError:
     # dotenv not available, continue without it

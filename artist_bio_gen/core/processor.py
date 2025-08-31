@@ -54,8 +54,6 @@ def log_processing_start(
     return start_time
 
 
-
-
 def log_progress_update(
     current: int,
     total: int,

@@ -12,7 +12,7 @@ from typing import Optional, NamedTuple
 class DatabaseConfig(NamedTuple):
     """
     Database configuration settings.
-    
+
     Attributes:
         url: Database connection URL
         pool_size: Number of connections in the pool
@@ -20,7 +20,7 @@ class DatabaseConfig(NamedTuple):
         connection_timeout: Timeout for getting connections (seconds)
         query_timeout: Timeout for individual queries (seconds)
     """
-    
+
     url: str
     pool_size: int = 4  # Match default worker count
     max_overflow: int = 8  # Allow burst connections
@@ -31,13 +31,13 @@ class DatabaseConfig(NamedTuple):
 class DatabaseResult(NamedTuple):
     """
     Result of a database operation.
-    
+
     Attributes:
         success: Whether the operation succeeded
         rows_affected: Number of rows affected by the operation
         error: Error message if the operation failed
     """
-    
+
     success: bool
     rows_affected: int
     error: Optional[str] = None

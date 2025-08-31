@@ -11,7 +11,9 @@ for processing artist data and generating biographies.
 
 __version__ = "1.0.0"
 __author__ = "Artist Bio Generator"
-__description__ = "Generate artist biographies using OpenAI API with database persistence"
+__description__ = (
+    "Generate artist biographies using OpenAI API with database persistence"
+)
 __license__ = "MIT"
 __maintainer__ = "Artist Bio Generator"
 __email__ = "support@example.com"
@@ -49,7 +51,7 @@ from .core import (
     process_artists_concurrent,
 )
 
-# Import API functions for public API  
+# Import API functions for public API
 from .api import (
     create_openai_client,
     call_openai_api,
@@ -79,12 +81,12 @@ from .utils import (
 __all__ = [
     # Package metadata
     "__version__",
-    "__author__", 
+    "__author__",
     "__description__",
     # Data models
     "ArtistData",
     "ParseResult",
-    "ApiResponse", 
+    "ApiResponse",
     "DatabaseConfig",
     "DatabaseResult",
     "ProcessingStats",
@@ -93,7 +95,7 @@ __all__ = [
     "EXIT_INPUT_ERROR",
     "EXIT_CONFIG_ERROR",
     "EXIT_API_FAILURES",
-    "EXIT_INTERRUPTED", 
+    "EXIT_INTERRUPTED",
     "EXIT_UNEXPECTED_ERROR",
     "DEFAULT_POOL_SIZE",
     "DEFAULT_MAX_OVERFLOW",
@@ -101,7 +103,7 @@ __all__ = [
     "DEFAULT_QUERY_TIMEOUT",
     # Core functionality
     "parse_input_file",
-    "write_jsonl_output", 
+    "write_jsonl_output",
     "process_artists_concurrent",
     # API functions
     "create_openai_client",

@@ -18,7 +18,7 @@ from .validation import _is_output_path_writable, apply_environment_defaults
 
 __all__ = [
     "setup_logging",
-    "create_progress_bar", 
+    "create_progress_bar",
     "_is_output_path_writable",
     "apply_environment_defaults",
 ]

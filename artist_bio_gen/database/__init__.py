@@ -32,7 +32,7 @@ from .utils import (
 __all__ = [
     # Connection management
     "create_db_connection_pool",
-    "get_db_connection", 
+    "get_db_connection",
     "close_db_connection_pool",
     # Configuration
     "validate_database_url",

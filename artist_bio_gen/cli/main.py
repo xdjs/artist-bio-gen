@@ -44,8 +44,6 @@ from ..utils import (
 logger = logging.getLogger(__name__)
 
 
-
-
 def main():
     """Main entry point for the script."""
     parser = create_argument_parser()
@@ -121,7 +119,7 @@ def main():
                 responses=all_responses,
                 output_path=args.output,
                 prompt_id=args.prompt_id,
-                version=args.version
+                version=args.version,
             )
 
         except KeyboardInterrupt:

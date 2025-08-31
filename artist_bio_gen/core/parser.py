@@ -41,9 +41,9 @@ def parse_input_file(file_path: str) -> ParseResult:
     header_skipped = False
 
     try:
-        with open(file_path, "r", encoding="utf-8", newline='') as f:
+        with open(file_path, "r", encoding="utf-8", newline="") as f:
             csv_reader = csv.reader(f)
-            
+
             for line_num, row in enumerate(csv_reader, 1):
                 # Skip blank lines
                 if not row or (len(row) == 1 and not row[0].strip()):
@@ -58,7 +58,7 @@ def parse_input_file(file_path: str) -> ParseResult:
                 # Skip header row if it looks like a header
                 if not header_skipped and len(row) >= 2:
                     first_field = row[0].strip().lower()
-                    if first_field in ['artist_id', 'id', 'uuid']:
+                    if first_field in ["artist_id", "id", "uuid"]:
                         header_skipped = True
                         skipped_lines += 1
                         continue
@@ -66,7 +66,9 @@ def parse_input_file(file_path: str) -> ParseResult:
                 # Parse the row
                 try:
                     if len(row) < 2:
-                        logger.warning(f"Line {line_num}: Insufficient columns (need at least artist_id,artist_name), skipping")
+                        logger.warning(
+                            f"Line {line_num}: Insufficient columns (need at least artist_id,artist_name), skipping"
+                        )
                         error_lines += 1
                         continue
 
@@ -76,7 +78,9 @@ def parse_input_file(file_path: str) -> ParseResult:
 
                     # Validate artist_id is a valid UUID
                     if not validate_uuid(artist_id):
-                        logger.warning(f"Line {line_num}: Invalid UUID format for artist_id '{artist_id}', skipping")
+                        logger.warning(
+                            f"Line {line_num}: Invalid UUID format for artist_id '{artist_id}', skipping"
+                        )
                         error_lines += 1
                         continue
 
@@ -89,8 +93,8 @@ def parse_input_file(file_path: str) -> ParseResult:
                     # Create artist data object
                     artist = ArtistData(
                         artist_id=artist_id,
-                        name=artist_name, 
-                        data=artist_data if artist_data else None
+                        name=artist_name,
+                        data=artist_data if artist_data else None,
                     )
                     artists.append(artist)
 

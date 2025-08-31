@@ -13,7 +13,7 @@ from .stats import ProcessingStats
 
 __all__ = [
     "ArtistData",
-    "ParseResult", 
+    "ParseResult",
     "ApiResponse",
     "DatabaseConfig",
     "DatabaseResult",
