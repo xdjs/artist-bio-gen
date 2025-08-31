@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Tests for run_artists.py
+Tests for py
 
 This module contains comprehensive tests for the artist bio generator script,
 focusing on CLI argument parsing and basic functionality.
@@ -15,7 +15,26 @@ import unittest
 from io import StringIO
 from unittest.mock import patch
 
-from artist_bio_gen import main as run_artists
+# Import CLI functions from their new location
+from artist_bio_gen.cli import (
+    create_argument_parser,
+    main,
+)
+
+# Import utilities
+from artist_bio_gen.utils import (
+    apply_environment_defaults,
+)
+
+# Import models for JSONL tests
+from artist_bio_gen.models import (
+    ApiResponse,
+)
+
+# Import core functions for output tests
+from artist_bio_gen.core import (
+    write_jsonl_output,
+)
 
 
 class TestArgumentParser(unittest.TestCase):
@@ -23,7 +42,7 @@ class TestArgumentParser(unittest.TestCase):
     
     def setUp(self):
         """Set up test fixtures."""
-        self.parser = run_artists.create_argument_parser()
+        self.parser = create_argument_parser()
     
     def test_required_input_file_argument(self):
         """Test that --input-file is required."""
@@ -39,7 +58,7 @@ class TestArgumentParser(unittest.TestCase):
         """Test that prompt ID defaults to environment variable."""
         with patch.dict(os.environ, {'OPENAI_PROMPT_ID': 'test_prompt_123'}):
             args = self.parser.parse_args(['--input-file', 'test.csv'])
-            args = run_artists.apply_environment_defaults(args)
+            args = apply_environment_defaults(args)
             self.assertEqual(args.prompt_id, 'test_prompt_123')
     
     def test_prompt_id_explicit_override(self):
@@ -49,7 +68,7 @@ class TestArgumentParser(unittest.TestCase):
                 '--input-file', 'test.csv',
                 '--prompt-id', 'explicit_prompt'
             ])
-            args = run_artists.apply_environment_defaults(args)
+            args = apply_environment_defaults(args)
             self.assertEqual(args.prompt_id, 'explicit_prompt')
     
 
@@ -156,9 +175,9 @@ class TestArgumentParser(unittest.TestCase):
         help_text = help_output.getvalue()
         
         # Check for example commands
-        self.assertIn('python run_artists.py --input-file artists.csv --prompt-id prompt_123', help_text)
-        self.assertIn('python run_artists.py --input-file data.txt --max-workers 8', help_text)
-        self.assertIn('python run_artists.py --input-file artists.csv --dry-run', help_text)
+        self.assertIn('python py --input-file artists.csv --prompt-id prompt_123', help_text)
+        self.assertIn('python py --input-file data.txt --max-workers 8', help_text)
+        self.assertIn('python py --input-file artists.csv --dry-run', help_text)
 
 
 class TestMainFunction(unittest.TestCase):
@@ -172,35 +191,33 @@ class TestMainFunction(unittest.TestCase):
         """Clean up after tests."""
         sys.argv = self.original_argv
     
-    @patch('run_artists.logger')
-    def test_main_function_basic_execution(self, mock_logger):
+    def test_main_function_basic_execution(self):
         """Test that main function executes without errors."""
-        sys.argv = ['run_artists.py', '--input-file', 'test.csv', '--prompt-id', 'test_prompt']
+        sys.argv = ['py', '--input-file', 'test.csv', '--prompt-id', 'test_prompt']
         
-        # Should not raise any exceptions
+        # Should not raise any exceptions (except expected SystemExit)
         try:
-            run_artists.main()
+            main()
         except SystemExit:
-            pass  # Expected when argparse encounters issues
+            pass  # Expected when argparse encounters issues or missing files
+        except Exception as e:
+            self.fail(f"Main function raised unexpected exception: {e}")
         
-        # Verify logging was called (may be empty if file doesn't exist)
         # The important thing is that the function doesn't crash
     
-    @patch('run_artists.logger')
-    def test_main_function_logging(self, mock_logger):
-        """Test that main function logs expected information."""
-        sys.argv = ['run_artists.py', '--input-file', 'artists.csv', '--prompt-id', 'prompt_123']
+    def test_main_function_logging(self):
+        """Test that main function can handle logging without errors."""
+        sys.argv = ['py', '--input-file', 'artists.csv', '--prompt-id', 'prompt_123']
         
         try:
-            run_artists.main()
+            main()
         except SystemExit:
-            pass
+            pass  # Expected when files don't exist or other issues
+        except Exception as e:
+            self.fail(f"Main function raised unexpected exception: {e}")
         
-        # Check that logging was called with expected messages
-        log_calls = [call[0][0] for call in mock_logger.info.call_args_list]
-        # The new logging format uses different messages, but we should see some logging
-        # The exact messages depend on whether the file exists and other factors
-        # We'll just verify that the function runs without crashing
+        # The main goal is to verify that the function runs without crashing
+        # Detailed logging verification would require more complex setup
 
 
 class TestEnvironmentVariableHandling(unittest.TestCase):
@@ -208,20 +225,20 @@ class TestEnvironmentVariableHandling(unittest.TestCase):
     
     def setUp(self):
         """Set up test fixtures."""
-        self.parser = run_artists.create_argument_parser()
+        self.parser = create_argument_parser()
     
     def test_no_environment_variables(self):
         """Test behavior when no environment variables are set."""
         with patch.dict(os.environ, {}, clear=True):
             args = self.parser.parse_args(['--input-file', 'test.csv'])
-            args = run_artists.apply_environment_defaults(args)
+            args = apply_environment_defaults(args)
             self.assertIsNone(args.prompt_id)
     
     def test_partial_environment_variables(self):
         """Test behavior when only some environment variables are set."""
         with patch.dict(os.environ, {'OPENAI_PROMPT_ID': 'test_prompt'}):
             args = self.parser.parse_args(['--input-file', 'test.csv'])
-            args = run_artists.apply_environment_defaults(args)
+            args = apply_environment_defaults(args)
             self.assertEqual(args.prompt_id, 'test_prompt')
     
     def test_all_environment_variables(self):
@@ -230,7 +247,7 @@ class TestEnvironmentVariableHandling(unittest.TestCase):
             'OPENAI_PROMPT_ID': 'env_prompt'
         }):
             args = self.parser.parse_args(['--input-file', 'test.csv'])
-            args = run_artists.apply_environment_defaults(args)
+            args = apply_environment_defaults(args)
             self.assertEqual(args.prompt_id, 'env_prompt')
 
 
@@ -239,7 +256,7 @@ class TestArgumentValidation(unittest.TestCase):
     
     def setUp(self):
         """Set up test fixtures."""
-        self.parser = run_artists.create_argument_parser()
+        self.parser = create_argument_parser()
     
     def test_max_workers_positive_integer(self):
         """Test that max_workers accepts positive integers."""
@@ -286,14 +303,14 @@ class TestFileStructure(unittest.TestCase):
     def test_required_functions_exist(self):
         """Test that required functions exist in the module."""
         import run_artists
-        self.assertTrue(callable(run_artists.main))
-        self.assertTrue(callable(run_artists.create_argument_parser))
+        self.assertTrue(callable(main))
+        self.assertTrue(callable(create_argument_parser))
     
     def test_logger_configuration(self):
         """Test that logger is properly configured."""
-        import run_artists
-        self.assertIsNotNone(run_artists.logger)
-        self.assertEqual(run_artists.logger.name, '__main__')
+        from artist_bio_gen.cli.main import logger
+        self.assertIsNotNone(logger)
+        self.assertEqual(logger.name, 'artist_bio_gen.cli.main')
 
 
 if __name__ == '__main__':
@@ -331,7 +348,7 @@ class TestJsonlOutput(unittest.TestCase):
         """Test writing successful API responses to JSONL file."""
         # Create test responses
         responses = [
-            run_artists.ApiResponse(
+            ApiResponse(
                 artist_id="550e8400-e29b-41d4-a716-446655440005",
                 artist_name="Taylor Swift",
                 artist_data="Pop singer-songwriter",
@@ -340,7 +357,7 @@ class TestJsonlOutput(unittest.TestCase):
                 created=1234567890,
                 error=None
             ),
-            run_artists.ApiResponse(
+            ApiResponse(
                 artist_id="550e8400-e29b-41d4-a716-446655440006",
                 artist_name="Drake",
                 artist_data=None,
@@ -352,7 +369,7 @@ class TestJsonlOutput(unittest.TestCase):
         ]
         
         # Write to JSONL file
-        run_artists.write_jsonl_output(
+        write_jsonl_output(
             responses=responses,
             output_path=self.output_file,
             prompt_id="test_prompt_123",
@@ -395,7 +412,7 @@ class TestJsonlOutput(unittest.TestCase):
         """Test writing API responses with errors to JSONL file."""
         # Create test responses with errors
         responses = [
-            run_artists.ApiResponse(
+            ApiResponse(
                 artist_id="550e8400-e29b-41d4-a716-446655440007",
                 artist_name="Failed Artist",
                 artist_data="Some data",
@@ -407,7 +424,7 @@ class TestJsonlOutput(unittest.TestCase):
         ]
         
         # Write to JSONL file
-        run_artists.write_jsonl_output(
+        write_jsonl_output(
             responses=responses,
             output_path=self.output_file,
             prompt_id="test_prompt_123"
@@ -436,7 +453,7 @@ class TestJsonlOutput(unittest.TestCase):
     def test_write_jsonl_output_no_version(self):
         """Test writing JSONL output without version parameter."""
         responses = [
-            run_artists.ApiResponse(
+            ApiResponse(
                 artist_id="550e8400-e29b-41d4-a716-446655440008",
                 artist_name="Test Artist",
                 artist_data=None,
@@ -448,7 +465,7 @@ class TestJsonlOutput(unittest.TestCase):
         ]
         
         # Write to JSONL file without version
-        run_artists.write_jsonl_output(
+        write_jsonl_output(
             responses=responses,
             output_path=self.output_file,
             prompt_id="test_prompt_456"
@@ -464,7 +481,7 @@ class TestJsonlOutput(unittest.TestCase):
     def test_write_jsonl_output_utf8_support(self):
         """Test writing JSONL output with UTF-8 characters."""
         responses = [
-            run_artists.ApiResponse(
+            ApiResponse(
                 artist_id="550e8400-e29b-41d4-a716-446655440009",
                 artist_name="Björk",
                 artist_data="Icelandic singer-songwriter",
@@ -476,7 +493,7 @@ class TestJsonlOutput(unittest.TestCase):
         ]
         
         # Write to JSONL file
-        run_artists.write_jsonl_output(
+        write_jsonl_output(
             responses=responses,
             output_path=self.output_file,
             prompt_id="test_prompt_utf8"

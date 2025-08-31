@@ -14,7 +14,29 @@ import unittest
 from io import StringIO
 from unittest.mock import patch, MagicMock
 
-from artist_bio_gen import main as run_artists
+# Import models from their new location
+from artist_bio_gen.models import (
+    ProcessingStats,
+)
+
+# Import utility functions
+from artist_bio_gen.utils import (
+    create_progress_bar,
+    setup_logging,
+)
+
+# Import core processing functions
+from artist_bio_gen.core import (
+    calculate_processing_stats,
+    log_processing_start,
+    log_processing_summary,
+    log_progress_update,
+)
+
+# Import CLI main function
+from artist_bio_gen.cli import (
+    main,
+)
 
 
 class TestProcessingStats(unittest.TestCase):
@@ -22,7 +44,7 @@ class TestProcessingStats(unittest.TestCase):
     
     def test_processing_stats_creation(self):
         """Test creating ProcessingStats with all fields."""
-        stats = run_artists.ProcessingStats(
+        stats = ProcessingStats(
             total_artists=10,
             successful_calls=8,
             failed_calls=2,
@@ -48,7 +70,7 @@ class TestProcessingStats(unittest.TestCase):
     
     def test_processing_stats_immutable(self):
         """Test that ProcessingStats is immutable."""
-        stats = run_artists.ProcessingStats(
+        stats = ProcessingStats(
             total_artists=10,
             successful_calls=8,
             failed_calls=2,
@@ -70,24 +92,24 @@ class TestProgressBar(unittest.TestCase):
     
     def test_progress_bar_empty(self):
         """Test progress bar with no progress."""
-        bar = run_artists.create_progress_bar(0, 10)
+        bar = create_progress_bar(0, 10)
         self.assertEqual(bar, "[░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░]")
     
     def test_progress_bar_half(self):
         """Test progress bar at 50%."""
-        bar = run_artists.create_progress_bar(5, 10)
+        bar = create_progress_bar(5, 10)
         # Should be approximately half filled (15 out of 30 characters)
         filled_chars = bar.count('█')
         self.assertEqual(filled_chars, 15)
     
     def test_progress_bar_full(self):
         """Test progress bar at 100%."""
-        bar = run_artists.create_progress_bar(10, 10)
+        bar = create_progress_bar(10, 10)
         self.assertEqual(bar, "[██████████████████████████████]")
     
     def test_progress_bar_partial(self):
         """Test progress bar at 33%."""
-        bar = run_artists.create_progress_bar(1, 3)
+        bar = create_progress_bar(1, 3)
         # Should be approximately 1/3 filled
         filled_chars = bar.count('█')
         self.assertGreater(filled_chars, 0)
@@ -95,7 +117,7 @@ class TestProgressBar(unittest.TestCase):
     
     def test_progress_bar_zero_total(self):
         """Test progress bar with zero total."""
-        bar = run_artists.create_progress_bar(0, 0)
+        bar = create_progress_bar(0, 0)
         self.assertEqual(bar, "[                              ]")
 
 
@@ -104,7 +126,7 @@ class TestStatisticsCalculation(unittest.TestCase):
     
     def test_calculate_processing_stats_basic(self):
         """Test basic statistics calculation."""
-        stats = run_artists.calculate_processing_stats(
+        stats = calculate_processing_stats(
             total_artists=10,
             successful_calls=8,
             failed_calls=2,
@@ -127,7 +149,7 @@ class TestStatisticsCalculation(unittest.TestCase):
     
     def test_calculate_processing_stats_zero_duration(self):
         """Test statistics calculation with zero duration."""
-        stats = run_artists.calculate_processing_stats(
+        stats = calculate_processing_stats(
             total_artists=0,
             successful_calls=0,
             failed_calls=0,
@@ -143,7 +165,7 @@ class TestStatisticsCalculation(unittest.TestCase):
     
     def test_calculate_processing_stats_zero_artists(self):
         """Test statistics calculation with zero artists."""
-        stats = run_artists.calculate_processing_stats(
+        stats = calculate_processing_stats(
             total_artists=0,
             successful_calls=0,
             failed_calls=0,
@@ -169,10 +191,10 @@ class TestLoggingFunctions(unittest.TestCase):
         import shutil
         shutil.rmtree(self.temp_dir)
     
-    @patch('run_artists.logger')
+    @patch('artist_bio_gen.core.processor.logger')
     def test_log_processing_start(self, mock_logger):
         """Test logging processing start."""
-        start_time = run_artists.log_processing_start(
+        start_time = log_processing_start(
             total_artists=10,
             input_file="test.csv",
             prompt_id="test_prompt",
@@ -194,10 +216,10 @@ class TestLoggingFunctions(unittest.TestCase):
         self.assertTrue(any("10" in call for call in log_calls))
         self.assertTrue(any("4" in call for call in log_calls))
     
-    @patch('run_artists.logger')
+    @patch('artist_bio_gen.core.processor.logger')
     def test_log_progress_update_success(self, mock_logger):
         """Test logging progress update for successful processing."""
-        run_artists.log_progress_update(5, 10, "Taylor Swift", True, 2.5)
+        log_progress_update(5, 10, "Taylor Swift", True, 2.5)
         
         mock_logger.info.assert_called_once()
         log_message = mock_logger.info.call_args[0][0]
@@ -210,10 +232,10 @@ class TestLoggingFunctions(unittest.TestCase):
         self.assertIn("SUCCESS", log_message)
         self.assertIn("2.50s", log_message)
     
-    @patch('run_artists.logger')
+    @patch('artist_bio_gen.core.processor.logger')
     def test_log_progress_update_failure(self, mock_logger):
         """Test logging progress update for failed processing."""
-        run_artists.log_progress_update(3, 10, "Drake", False, 1.2)
+        log_progress_update(3, 10, "Drake", False, 1.2)
         
         mock_logger.info.assert_called_once()
         log_message = mock_logger.info.call_args[0][0]
@@ -226,10 +248,10 @@ class TestLoggingFunctions(unittest.TestCase):
         self.assertIn("FAILED", log_message)
         self.assertIn("1.20s", log_message)
     
-    @patch('run_artists.logger')
+    @patch('artist_bio_gen.core.processor.logger')
     def test_log_processing_summary(self, mock_logger):
         """Test logging processing summary."""
-        stats = run_artists.ProcessingStats(
+        stats = ProcessingStats(
             total_artists=10,
             successful_calls=8,
             failed_calls=2,
@@ -242,7 +264,7 @@ class TestLoggingFunctions(unittest.TestCase):
             api_calls_per_second=1.0
         )
         
-        run_artists.log_processing_summary(stats)
+        log_processing_summary(stats)
         
         # Check that multiple log messages were called
         self.assertGreater(mock_logger.info.call_count, 5)
@@ -266,12 +288,12 @@ class TestLoggingConfiguration(unittest.TestCase):
         """Test default logging setup."""
         # This is a bit tricky to test since logging is global
         # We'll just ensure the function exists and can be called
-        run_artists.setup_logging(verbose=False)
+        setup_logging(verbose=False)
         # If we get here without error, the function works
     
     def test_setup_logging_verbose(self):
         """Test verbose logging setup."""
-        run_artists.setup_logging(verbose=True)
+        setup_logging(verbose=True)
         # If we get here without error, the function works
 
 
@@ -296,8 +318,8 @@ class TestEnhancedMainFunction(unittest.TestCase):
             f.write(content)
         return temp_file
     
-    @patch('run_artists.logger')
-    @patch('run_artists.create_openai_client')
+    @patch('artist_bio_gen.core.processor.logger')
+    @patch('artist_bio_gen.api.client.create_openai_client')
     def test_main_function_enhanced_logging(self, mock_client, mock_logger):
         """Test that main function uses enhanced logging."""
         content = """550e8400-e29b-41d4-a716-446655440035,Taylor Swift,Pop singer-songwriter
@@ -314,7 +336,7 @@ class TestEnhancedMainFunction(unittest.TestCase):
         mock_client.return_value = mock_openai_client
         
         sys.argv = [
-            'run_artists.py',
+            'py',
             '--input-file', temp_file,
             '--prompt-id', 'test_prompt'
         ]
@@ -324,7 +346,7 @@ class TestEnhancedMainFunction(unittest.TestCase):
         sys.stdout = captured_output = StringIO()
         
         try:
-            run_artists.main()
+            main()
         except SystemExit:
             pass
         finally:
@@ -342,14 +364,14 @@ class TestEnhancedMainFunction(unittest.TestCase):
         # Should have processing summary
         self.assertTrue(any("PROCESSING SUMMARY" in call for call in log_calls))
     
-    @patch('run_artists.logger')
+    @patch('artist_bio_gen.core.processor.logger')
     def test_main_function_verbose_flag(self, mock_logger):
         """Test that verbose flag is handled correctly."""
         content = """550e8400-e29b-41d4-a716-446655440037,Taylor Swift,Pop singer-songwriter"""
         temp_file = self.create_temp_file(content)
         
         sys.argv = [
-            'run_artists.py',
+            'py',
             '--input-file', temp_file,
             '--prompt-id', 'test_prompt',
             '--verbose',
@@ -357,7 +379,7 @@ class TestEnhancedMainFunction(unittest.TestCase):
         ]
         
         try:
-            run_artists.main()
+            main()
         except SystemExit:
             pass
         

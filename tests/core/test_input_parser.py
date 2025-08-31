@@ -13,7 +13,21 @@ import unittest
 from io import StringIO
 from unittest.mock import patch
 
-from artist_bio_gen import main as run_artists
+# Import models from their new location
+from artist_bio_gen.models import (
+    ArtistData,
+    ParseResult,
+)
+
+# Import core parsing function
+from artist_bio_gen.core import (
+    parse_input_file,
+)
+
+# Import CLI main function
+from artist_bio_gen.cli import (
+    main,
+)
 
 
 class TestArtistData(unittest.TestCase):
@@ -21,14 +35,14 @@ class TestArtistData(unittest.TestCase):
     
     def test_artist_data_creation(self):
         """Test creating ArtistData with name only."""
-        artist = run_artists.ArtistData(artist_id="550e8400-e29b-41d4-a716-446655440000", name="Taylor Swift")
+        artist = ArtistData(artist_id="550e8400-e29b-41d4-a716-446655440000", name="Taylor Swift")
         self.assertEqual(artist.artist_id, "550e8400-e29b-41d4-a716-446655440000")
         self.assertEqual(artist.name, "Taylor Swift")
         self.assertIsNone(artist.data)
     
     def test_artist_data_with_data(self):
         """Test creating ArtistData with name and data."""
-        artist = run_artists.ArtistData(
+        artist = ArtistData(
             artist_id="550e8400-e29b-41d4-a716-446655440001",
             name="Taylor Swift",
             data="Pop singer-songwriter"
@@ -39,7 +53,7 @@ class TestArtistData(unittest.TestCase):
     
     def test_artist_data_immutable(self):
         """Test that ArtistData is immutable."""
-        artist = run_artists.ArtistData(artist_id="550e8400-e29b-41d4-a716-446655440002", name="Taylor Swift")
+        artist = ArtistData(artist_id="550e8400-e29b-41d4-a716-446655440002", name="Taylor Swift")
         with self.assertRaises(AttributeError):
             artist.name = "Drake"
 
@@ -50,10 +64,10 @@ class TestParseResult(unittest.TestCase):
     def test_parse_result_creation(self):
         """Test creating ParseResult."""
         artists = [
-            run_artists.ArtistData(artist_id="550e8400-e29b-41d4-a716-446655440003", name="Artist 1"),
-            run_artists.ArtistData(artist_id="550e8400-e29b-41d4-a716-446655440004", name="Artist 2")
+            ArtistData(artist_id="550e8400-e29b-41d4-a716-446655440003", name="Artist 1"),
+            ArtistData(artist_id="550e8400-e29b-41d4-a716-446655440004", name="Artist 2")
         ]
-        result = run_artists.ParseResult(
+        result = ParseResult(
             artists=artists,
             skipped_lines=3,
             error_lines=1
@@ -64,7 +78,7 @@ class TestParseResult(unittest.TestCase):
     
     def test_parse_result_immutable(self):
         """Test that ParseResult is immutable."""
-        result = run_artists.ParseResult(artists=[], skipped_lines=0, error_lines=0)
+        result = ParseResult(artists=[], skipped_lines=0, error_lines=0)
         with self.assertRaises(AttributeError):
             result.skipped_lines = 5
 
@@ -94,7 +108,7 @@ class TestParseInputFile(unittest.TestCase):
 550e8400-e29b-41d4-a716-446655440011,Drake,Canadian rapper"""
         temp_file = self.create_temp_file(content)
         
-        result = run_artists.parse_input_file(temp_file)
+        result = parse_input_file(temp_file)
         
         self.assertEqual(len(result.artists), 2)
         self.assertEqual(result.artists[0].artist_id, "550e8400-e29b-41d4-a716-446655440010")
@@ -114,7 +128,7 @@ class TestParseInputFile(unittest.TestCase):
 550e8400-e29b-41d4-a716-446655440020,Drake,Canadian rapper"""
         temp_file = self.create_temp_file(content)
         
-        result = run_artists.parse_input_file(temp_file)
+        result = parse_input_file(temp_file)
         
         self.assertEqual(len(result.artists), 2)
         self.assertEqual(result.skipped_lines, 2)
@@ -129,7 +143,7 @@ class TestParseInputFile(unittest.TestCase):
 """
         temp_file = self.create_temp_file(content)
         
-        result = run_artists.parse_input_file(temp_file)
+        result = parse_input_file(temp_file)
         
         self.assertEqual(len(result.artists), 2)
         self.assertEqual(result.skipped_lines, 2)  # 2 blank lines (trailing blank line is stripped)
@@ -142,7 +156,7 @@ class TestParseInputFile(unittest.TestCase):
 550e8400-e29b-41d4-a716-446655440014,Billie Eilish,Alternative pop artist"""
         temp_file = self.create_temp_file(content)
         
-        result = run_artists.parse_input_file(temp_file)
+        result = parse_input_file(temp_file)
         
         self.assertEqual(len(result.artists), 3)
         self.assertEqual(result.artists[0].artist_id, "550e8400-e29b-41d4-a716-446655440012")
@@ -161,7 +175,7 @@ class TestParseInputFile(unittest.TestCase):
   550e8400-e29b-41d4-a716-446655440016  ,  Drake  ,  Canadian rapper  """
         temp_file = self.create_temp_file(content)
         
-        result = run_artists.parse_input_file(temp_file)
+        result = parse_input_file(temp_file)
         
         self.assertEqual(len(result.artists), 2)
         self.assertEqual(result.artists[0].artist_id, "550e8400-e29b-41d4-a716-446655440015")
@@ -178,8 +192,8 @@ class TestParseInputFile(unittest.TestCase):
 550e8400-e29b-41d4-a716-446655440024,Drake,Canadian rapper"""
         temp_file = self.create_temp_file(content)
         
-        with patch('run_artists.logger') as mock_logger:
-            result = run_artists.parse_input_file(temp_file)
+        with patch('artist_bio_gen.core.parser.logger') as mock_logger:
+            result = parse_input_file(temp_file)
         
         self.assertEqual(len(result.artists), 2)  # Only 2 valid artists
         self.assertEqual(result.error_lines, 1)
@@ -192,7 +206,7 @@ class TestParseInputFile(unittest.TestCase):
 550e8400-e29b-41d4-a716-446655440026,Drake,"Canadian rapper, singer, and producer\""""
         temp_file = self.create_temp_file(content)
         
-        result = run_artists.parse_input_file(temp_file)
+        result = parse_input_file(temp_file)
         
         self.assertEqual(len(result.artists), 2)
         self.assertEqual(result.artists[0].name, "Taylor Swift")
@@ -204,7 +218,7 @@ class TestParseInputFile(unittest.TestCase):
         """Test parsing an empty file."""
         temp_file = self.create_temp_file("")
         
-        result = run_artists.parse_input_file(temp_file)
+        result = parse_input_file(temp_file)
         
         self.assertEqual(len(result.artists), 0)
         self.assertEqual(result.skipped_lines, 0)
@@ -219,7 +233,7 @@ class TestParseInputFile(unittest.TestCase):
 """
         temp_file = self.create_temp_file(content)
         
-        result = run_artists.parse_input_file(temp_file)
+        result = parse_input_file(temp_file)
         
         self.assertEqual(len(result.artists), 0)
         self.assertEqual(result.skipped_lines, 4)  # 2 comments + 2 blank lines (trailing blank line is stripped)
@@ -230,7 +244,7 @@ class TestParseInputFile(unittest.TestCase):
         non_existent_file = os.path.join(self.temp_dir, "nonexistent.csv")
         
         with self.assertRaises(FileNotFoundError):
-            run_artists.parse_input_file(non_existent_file)
+            parse_input_file(non_existent_file)
     
     def test_parse_file_encoding_error(self):
         """Test parsing a file with invalid encoding."""
@@ -240,7 +254,7 @@ class TestParseInputFile(unittest.TestCase):
             f.write(b'\xff\xfe\x00\x00')  # Invalid UTF-8
         
         with self.assertRaises(UnicodeDecodeError):
-            run_artists.parse_input_file(temp_file)
+            parse_input_file(temp_file)
     
     def test_parse_file_utf8_support(self):
         """Test parsing a file with UTF-8 characters."""
@@ -249,7 +263,7 @@ class TestParseInputFile(unittest.TestCase):
 """
         temp_file = self.create_temp_file(content)
         
-        result = run_artists.parse_input_file(temp_file)
+        result = parse_input_file(temp_file)
         
         self.assertEqual(len(result.artists), 2)
         self.assertEqual(result.artists[0].artist_id, "550e8400-e29b-41d4-a716-446655440032")
@@ -268,8 +282,8 @@ class TestParseInputFile(unittest.TestCase):
 ,Empty name"""
         temp_file = self.create_temp_file(content)
         
-        with patch('run_artists.logger') as mock_logger:
-            result = run_artists.parse_input_file(temp_file)
+        with patch('artist_bio_gen.core.parser.logger') as mock_logger:
+            result = parse_input_file(temp_file)
         
         # Check that appropriate log messages were called
         mock_logger.info.assert_called()
@@ -286,7 +300,7 @@ class TestParseInputFile(unittest.TestCase):
   550e8400-e29b-41d4-a716-446655440018  ,  Drake  ,  Canadian rapper  """
         temp_file = self.create_temp_file(content)
         
-        result = run_artists.parse_input_file(temp_file)
+        result = parse_input_file(temp_file)
         
         self.assertEqual(len(result.artists), 2)
         self.assertEqual(result.artists[0].artist_id, "550e8400-e29b-41d4-a716-446655440017")
@@ -301,7 +315,7 @@ class TestParseInputFile(unittest.TestCase):
         content = """550e8400-e29b-41d4-a716-446655440034,Taylor Swift"""
         temp_file = self.create_temp_file(content)
         
-        result = run_artists.parse_input_file(temp_file)
+        result = parse_input_file(temp_file)
         
         self.assertEqual(len(result.artists), 1)
         self.assertEqual(result.artists[0].artist_id, "550e8400-e29b-41d4-a716-446655440034")
@@ -330,7 +344,7 @@ class TestMainFunctionWithParser(unittest.TestCase):
             f.write(content)
         return temp_file
     
-    @patch('run_artists.logger')
+    @patch('artist_bio_gen.core.parser.logger')
     def test_main_function_dry_run(self, mock_logger):
         """Test main function with dry run mode."""
         content = """550e8400-e29b-41d4-a716-446655440029,Taylor Swift,Pop singer-songwriter
@@ -338,7 +352,7 @@ class TestMainFunctionWithParser(unittest.TestCase):
 550e8400-e29b-41d4-a716-446655440031,Billie Eilish,Alternative pop artist"""
         temp_file = self.create_temp_file(content)
         
-        sys.argv = ['run_artists.py', '--input-file', temp_file, '--prompt-id', 'test_prompt', '--dry-run']
+        sys.argv = ['py', '--input-file', temp_file, '--prompt-id', 'test_prompt', '--dry-run']
         
         # Capture stdout
         from io import StringIO
@@ -346,7 +360,7 @@ class TestMainFunctionWithParser(unittest.TestCase):
         sys.stdout = captured_output = StringIO()
         
         try:
-            run_artists.main()
+            main()
         except SystemExit:
             pass
         finally:
@@ -363,30 +377,30 @@ class TestMainFunctionWithParser(unittest.TestCase):
         # Check that logging was called
         mock_logger.info.assert_called()
     
-    @patch('run_artists.logger')
+    @patch('artist_bio_gen.core.parser.logger')
     def test_main_function_no_artists(self, mock_logger):
         """Test main function with file containing no valid artists."""
         content = """# Only comments
 # No valid data"""
         temp_file = self.create_temp_file(content)
         
-        sys.argv = ['run_artists.py', '--input-file', temp_file, '--prompt-id', 'test_prompt']
+        sys.argv = ['py', '--input-file', temp_file, '--prompt-id', 'test_prompt']
         
         with self.assertRaises(SystemExit) as cm:
-            run_artists.main()
+            main()
         
         self.assertEqual(cm.exception.code, 1)
         mock_logger.error.assert_called()
     
-    @patch('run_artists.logger')
+    @patch('artist_bio_gen.core.parser.logger')
     def test_main_function_file_not_found(self, mock_logger):
         """Test main function with non-existent file."""
         non_existent_file = os.path.join(self.temp_dir, "nonexistent.csv")
         
-        sys.argv = ['run_artists.py', '--input-file', non_existent_file, '--prompt-id', 'test_prompt']
+        sys.argv = ['py', '--input-file', non_existent_file, '--prompt-id', 'test_prompt']
         
         with self.assertRaises(SystemExit) as cm:
-            run_artists.main()
+            main()
         
         self.assertEqual(cm.exception.code, 1)
         mock_logger.error.assert_called()
