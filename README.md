@@ -1,6 +1,6 @@
 # Artist Bio Generator
 
-A Python script that uses the OpenAI Responses API to generate artist biographies from CSV-like input files. The script processes multiple artists concurrently, provides comprehensive logging and monitoring, and outputs results in both stdout and JSONL formats.
+A modular Python package that uses the OpenAI Responses API to generate artist biographies from CSV-like input files. The package provides both a command-line interface and programmatic API for processing multiple artists concurrently with comprehensive logging, monitoring, and database persistence.
 
 ## 🚀 Features
 
@@ -12,31 +12,107 @@ A Python script that uses the OpenAI Responses API to generate artist biographie
 - **Multiple Output Formats**: Both stdout and JSONL file output
 - **Dry Run Mode**: Test your input files without making API calls
 - **Verbose Logging**: Debug-level logging for troubleshooting
+- **Modular Architecture**: Clean separation of concerns with importable modules
+- **Library API**: Use as a Python package in your own applications
+
+## 📦 Package Structure
+
+```
+artist_bio_gen/
+├── __init__.py          # Public API exports
+├── main.py              # Main entry point
+├── constants.py         # Configuration constants
+├── models/              # Data models and structures
+├── api/                 # OpenAI API integration
+├── database/            # Database operations
+├── core/                # Business logic (parsing, processing, output)
+├── cli/                 # Command-line interface
+└── utils/               # Shared utilities
+```
+
+### Module Responsibilities
+
+| Module | Purpose | Key Functions |
+|--------|---------|---------------|
+| `api/` | OpenAI API integration | `create_openai_client()`, `call_openai_api()` |
+| `database/` | PostgreSQL operations | `create_db_connection_pool()`, `update_artist_bio()`, `validate_database_url()` |
+| `core/` | Business logic | `parse_input_file()`, `process_artists_concurrent()`, `write_jsonl_output()` |
+| `cli/` | Command-line interface | `main()`, `create_argument_parser()` |
+| `utils/` | Shared utilities | `setup_logging()`, `create_progress_bar()`, `apply_environment_defaults()` |
+| `models/` | Data structures | `ArtistData`, `ApiResponse`, `ProcessingStats` |
 
 ## 📋 Requirements
 
-- Python 3.11+
-- OpenAI API key
-- Valid OpenAI prompt ID
+- **Python**: 3.11 or higher
+- **OpenAI API Access**: Valid API key and prompt ID
+- **PostgreSQL Database**: For bio persistence (optional)
+- **Python Packages**: Listed in `requirements.txt`
 
-## 🛠️ Installation
+## 🛠️ Installation & Setup
 
-1. **Clone or download the project files**
-2. **Install dependencies:**
-   ```bash
-   pip install -r requirements.txt
-   ```
+### 1. **Clone or download the project files**
+
+### 2. **Install Python dependencies:**
+
+**Option A: Install all dependencies at once**
+```bash
+pip install -r requirements.txt
+```
+
+**Option B: Install dependencies individually**
+```bash
+# Core runtime dependencies
+pip install "openai>=1.0.0"
+pip install "psycopg[binary,pool]>=3.2.0"  # For database connectivity
+pip install "python-dotenv>=1.0.0"         # For .env file support
+pip install "tenacity>=8.0.0"              # For retry logic
+pip install "aiohttp>=3.8.0"               # For async HTTP
+
+# Development dependencies (optional)
+pip install "pytest>=7.0.0"                # For running tests
+pip install "black>=23.0.0"                # For code formatting
+pip install "mypy>=1.0.0"                  # For type checking
+```
+
+**Note:** The `psycopg[binary,pool]` package is required for database functionality. The `[binary,pool]` extras provide:
+- `binary`: Pre-compiled PostgreSQL adapter for better performance
+- `pool`: Connection pooling support for concurrent database operations
 
 3. **Set up environment variables:**
    ```bash
    export OPENAI_API_KEY="your-api-key-here"
    export OPENAI_PROMPT_ID="your-prompt-id-here"  # Optional
+   export DATABASE_URL="postgresql://username:password@localhost:5432/artist_bios"
    ```
 
    Or create a `.env.local` file:
    ```
    OPENAI_API_KEY=your-api-key-here
    OPENAI_PROMPT_ID=your-prompt-id-here
+   DATABASE_URL=postgresql://username:password@localhost:5432/artist_bios
+   ```
+
+4. **Set up PostgreSQL database:**
+   ```sql
+   CREATE DATABASE artist_bios;
+   
+   -- Production table
+   CREATE TABLE artists (
+     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+     name TEXT NOT NULL,
+     bio TEXT,
+     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+   );
+   
+   -- Test table (optional, for --test-mode)
+   CREATE TABLE test_artists (
+     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+     name VARCHAR(255) NOT NULL,
+     bio TEXT,
+     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+   );
    ```
 
 ## 📖 Usage
@@ -56,6 +132,8 @@ python3 run_artists.py --input-file artists.csv --prompt-id your-prompt-id
 | `--version` | Prompt version | None | ❌ |
 | `--output` | JSONL output file path | `out.jsonl` | ❌ |
 | `--max-workers` | Max concurrent requests | `4` | ❌ |
+| `--enable-db` | Enable database bio updates | `False` | ❌ |
+| `--test-mode` | Use test_artists table | `False` | ❌ |
 | `--dry-run` | Parse inputs without API calls | `False` | ❌ |
 | `--verbose` | Enable debug logging | `False` | ❌ |
 
@@ -79,6 +157,84 @@ python3 run_artists.py --input-file artists.csv --prompt-id prompt_123 --dry-run
 **Verbose logging for debugging:**
 ```bash
 python3 run_artists.py --input-file artists.csv --prompt-id prompt_123 --verbose
+```
+
+**With database updates enabled:**
+```bash
+python3 run_artists.py --input-file artists.csv --prompt-id prompt_123 --enable-db --verbose
+```
+
+**Testing with test database table:**
+```bash
+python3 run_artists.py --input-file test_artists.csv --prompt-id prompt_123 --enable-db --test-mode --verbose
+```
+
+### Library Usage
+
+The package can be imported and used programmatically in your Python applications:
+
+**Basic parsing and processing:**
+```python
+from artist_bio_gen import parse_input_file, process_artists_concurrent
+from artist_bio_gen import create_openai_client, setup_logging
+
+# Setup logging
+setup_logging(verbose=True)
+
+# Parse input file
+result = parse_input_file("artists.csv")
+print(f"Found {len(result.artists)} artists")
+
+# Create OpenAI client
+client = create_openai_client()
+
+# Process artists (requires proper environment setup)
+responses = process_artists_concurrent(
+    result.artists, 
+    client, 
+    "your-prompt-id",
+    max_workers=4
+)
+```
+
+**Database operations:**
+```python
+from artist_bio_gen import create_db_connection_pool, update_artist_bio
+from artist_bio_gen import validate_database_url
+
+# Validate database URL
+if validate_database_url("postgresql://user:pass@localhost/db"):
+    # Create connection pool
+    pool = create_db_connection_pool("postgresql://user:pass@localhost/db")
+    
+    # Update artist bio in database
+    update_artist_bio(pool, "artist-uuid", "Generated biography text")
+```
+
+**Custom processing pipeline:**
+```python
+from artist_bio_gen import parse_input_file, write_jsonl_output
+from artist_bio_gen.models import ApiResponse
+
+# Parse input
+result = parse_input_file("input.csv") 
+
+# Process with your own logic
+responses = []
+for artist in result.artists:
+    # Your custom processing logic here
+    response = ApiResponse(
+        artist_id=artist.artist_id,
+        artist_name=artist.name,
+        artist_data=artist.data,
+        response_text="Your generated bio",
+        response_id="response-123",
+        response_created_at=1234567890
+    )
+    responses.append(response)
+
+# Output results
+write_jsonl_output(responses, "output.jsonl")
 ```
 
 ## 📝 Input File Format
@@ -166,10 +322,10 @@ Run the comprehensive test suite:
 python3 run_tests.py
 
 # Run specific test categories
-python3 test_input_parser.py      # Input parsing tests
-python3 test_logging_monitoring.py # Logging and monitoring tests
-python3 test_run_artists.py       # CLI and main function tests
-python3 test_example_data.py      # Example data validation tests
+python3 run_tests.py test_input_parser.py       # Input parsing tests
+python3 run_tests.py test_logging_monitoring.py # Logging and monitoring tests
+python3 run_tests.py test_run_artists.py        # CLI and main function tests
+python3 run_tests.py test_example_data.py       # Data validation tests
 ```
 
 ## 📁 Project Structure
@@ -180,11 +336,12 @@ artist-bio-gen/
 ├── requirements.txt            # Python dependencies
 ├── example_artists.csv         # Example input file
 ├── README.md                   # This file
-├── run_tests.py               # Test runner
-├── test_input_parser.py       # Input parsing tests
-├── test_logging_monitoring.py # Logging tests
-├── test_run_artists.py        # CLI tests
-└── test_example_data.py       # Data validation tests
+├── run_tests.py                # Test runner
+└── tests/                      # Test suite
+    ├── test_input_parser.py       # Input parsing tests
+    ├── test_logging_monitoring.py # Logging tests
+    ├── test_run_artists.py        # CLI tests
+    └── test_example_data.py       # Data validation tests
 ```
 
 ## 🔧 Development
@@ -196,6 +353,7 @@ artist-bio-gen/
 - `aiohttp>=3.8.0` - For async HTTP requests
 - `tenacity>=8.0.0` - For retry logic
 - `python-dotenv>=1.0.0` - Environment variable management
+- `psycopg3[binary]>=3.1.0` - PostgreSQL database adapter
 
 **Development Dependencies:**
 - `pytest>=7.0.0` - Testing framework
