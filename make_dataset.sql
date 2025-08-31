@@ -1,0 +1,3 @@
+\set ON_ERROR_STOP on
+
+\copy (SELECT id AS artist_id, name AS artist_name, jsonb_strip_nulls(jsonb_build_object('spotify',NULLIF(spotify,''),'instagram',NULLIF(instagram,''),'x',NULLIF(x,''),'youtube',NULLIF(youtube,''),'youtubechannel',NULLIF(youtubechannel,''),'wikipedia',NULLIF(wikipedia,''),'soundcloud',NULLIF(soundcloud,''),'tiktok',NULLIF(tiktok,'')))::text AS artist_data FROM artists WHERE NULLIF(spotify,'') IS NOT NULL AND (NULLIF(instagram,'') IS NOT NULL OR NULLIF(x,'') IS NOT NULL OR NULLIF(youtube,'') IS NOT NULL OR NULLIF(youtubechannel,'') IS NOT NULL OR NULLIF(wikipedia,'') IS NOT NULL OR NULLIF(soundcloud,'') IS NOT NULL OR NULLIF(tiktok,'') IS NOT NULL) ORDER BY name) TO 'artists_dataset.csv' WITH CSV HEADER
