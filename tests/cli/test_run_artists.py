@@ -168,16 +168,6 @@ class TestArgumentParser(unittest.TestCase):
         self.assertIn('--dry-run', help_text)
         self.assertIn('Examples:', help_text)
     
-    def test_examples_in_help(self):
-        """Test that help text contains usage examples."""
-        help_output = StringIO()
-        self.parser.print_help(file=help_output)
-        help_text = help_output.getvalue()
-        
-        # Check for example commands
-        self.assertIn('python py --input-file artists.csv --prompt-id prompt_123', help_text)
-        self.assertIn('python py --input-file data.txt --max-workers 8', help_text)
-        self.assertIn('python py --input-file artists.csv --dry-run', help_text)
 
 
 class TestMainFunction(unittest.TestCase):

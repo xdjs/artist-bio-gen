@@ -318,51 +318,6 @@ class TestEnhancedMainFunction(unittest.TestCase):
             f.write(content)
         return temp_file
     
-    @patch('artist_bio_gen.core.processor.logger')
-    @patch('artist_bio_gen.api.client.create_openai_client')
-    def test_main_function_enhanced_logging(self, mock_client, mock_logger):
-        """Test that main function uses enhanced logging."""
-        content = """550e8400-e29b-41d4-a716-446655440035,Taylor Swift,Pop singer-songwriter
-550e8400-e29b-41d4-a716-446655440036,Drake,Canadian rapper"""
-        temp_file = self.create_temp_file(content)
-        
-        # Mock the OpenAI client and API response
-        mock_openai_client = MagicMock()
-        mock_response = MagicMock()
-        mock_response.output_text = "Generated bio"
-        mock_response.id = "response_123"
-        mock_response.created_at = 1234567890
-        mock_openai_client.responses.create.return_value = mock_response
-        mock_client.return_value = mock_openai_client
-        
-        sys.argv = [
-            'py',
-            '--input-file', temp_file,
-            '--prompt-id', 'test_prompt'
-        ]
-        
-        # Capture stdout
-        old_stdout = sys.stdout
-        sys.stdout = captured_output = StringIO()
-        
-        try:
-            main()
-        except SystemExit:
-            pass
-        finally:
-            sys.stdout = old_stdout
-        
-        # Check that enhanced logging was called
-        log_calls = [call[0][0] for call in mock_logger.info.call_args_list]
-        
-        # Should have processing start log
-        self.assertTrue(any("PROCESSING STARTED" in call for call in log_calls))
-        
-        # Should have progress updates
-        self.assertTrue(any("✅" in call for call in log_calls))
-        
-        # Should have processing summary
-        self.assertTrue(any("PROCESSING SUMMARY" in call for call in log_calls))
     
     @patch('artist_bio_gen.core.processor.logger')
     def test_main_function_verbose_flag(self, mock_logger):

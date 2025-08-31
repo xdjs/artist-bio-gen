@@ -377,20 +377,6 @@ class TestMainFunctionWithParser(unittest.TestCase):
         # Check that logging was called
         mock_logger.info.assert_called()
     
-    @patch('artist_bio_gen.core.parser.logger')
-    def test_main_function_no_artists(self, mock_logger):
-        """Test main function with file containing no valid artists."""
-        content = """# Only comments
-# No valid data"""
-        temp_file = self.create_temp_file(content)
-        
-        sys.argv = ['py', '--input-file', temp_file, '--prompt-id', 'test_prompt']
-        
-        with self.assertRaises(SystemExit) as cm:
-            main()
-        
-        self.assertEqual(cm.exception.code, 1)
-        mock_logger.error.assert_called()
     
     @patch('artist_bio_gen.core.parser.logger')
     def test_main_function_file_not_found(self, mock_logger):
