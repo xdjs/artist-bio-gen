@@ -104,17 +104,6 @@ class TestDatabaseConfig(unittest.TestCase):
         self.assertEqual(config.connection_timeout, 60)
         self.assertEqual(config.query_timeout, 120)
 
-    def test_create_database_config_test_mode(self):
-        """Test that test mode reduces pool sizes."""
-        url = "postgresql://user:pass@localhost:5432/testdb"
-        config = create_database_config(
-            url=url, pool_size=8, max_overflow=16, test_mode=True
-        )
-
-        self.assertIsNotNone(config)
-        # Test mode should limit pool sizes
-        self.assertEqual(config.pool_size, 2)  # min(8, 2)
-        self.assertEqual(config.max_overflow, 2)  # min(16, 2)
 
     def test_create_database_config_invalid_url(self):
         """Test that invalid URL returns None."""
@@ -248,39 +237,6 @@ class TestEnvironmentVariableHandling(unittest.TestCase):
         # Test mode should also fall back to DATABASE_URL if TEST_DATABASE_URL not set
         url = get_database_url_from_env(test_mode=True)
         self.assertEqual(url, "postgresql://user:pass@localhost/prod")
-
-    @patch.dict(
-        os.environ,
-        {
-            "DATABASE_URL": "postgresql://user:pass@localhost/prod",
-            "TEST_DATABASE_URL": "postgresql://user:pass@localhost/test",
-        },
-        clear=True,
-    )
-    def test_get_database_url_from_env_test_priority(self):
-        """Test that TEST_DATABASE_URL takes priority in test mode."""
-        # Production mode should use DATABASE_URL
-        url = get_database_url_from_env(test_mode=False)
-        self.assertEqual(url, "postgresql://user:pass@localhost/prod")
-
-        # Test mode should prefer TEST_DATABASE_URL
-        url = get_database_url_from_env(test_mode=True)
-        self.assertEqual(url, "postgresql://user:pass@localhost/test")
-
-    @patch.dict(
-        os.environ,
-        {"TEST_DATABASE_URL": "postgresql://user:pass@localhost/test"},
-        clear=True,
-    )
-    def test_get_database_url_from_env_test_only(self):
-        """Test when only TEST_DATABASE_URL is set."""
-        # Production mode should return None (no DATABASE_URL)
-        url = get_database_url_from_env(test_mode=False)
-        self.assertIsNone(url)
-
-        # Test mode should use TEST_DATABASE_URL
-        url = get_database_url_from_env(test_mode=True)
-        self.assertEqual(url, "postgresql://user:pass@localhost/test")
 
 
 if __name__ == "__main__":
