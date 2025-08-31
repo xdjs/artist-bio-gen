@@ -112,26 +112,27 @@ Refactor the monolithic `run_artists.py` script into separate, focused modules f
   - ✅ `retry_with_exponential_backoff()` (decorator for retry logic)
   - ✅ Update imports in main.py to use new API modules
 
-### Phase 5: Input/Output Module Separation
+### Phase 5: Input/Output Module Separation ✅ **COMPLETED**
 **Priority: High | Estimated Time: 2-3 hours**
 
-#### Task 5.1: Create Input Parsing Module
-- [ ] Create `artist_bio_gen/core/__init__.py`
-- [ ] Create `artist_bio_gen/core/parser.py`
-  - [ ] `parse_input_file()`
-  - [ ] CSV parsing and validation logic
-  - [ ] `validate_uuid()` function
+#### Task 5.1: Create Input Parsing Module ✅ **COMPLETED**
+- ✅ Create `artist_bio_gen/core/__init__.py`
+- ✅ Create `artist_bio_gen/core/parser.py`
+  - ✅ `parse_input_file()` (CSV parsing and validation)
+  - ✅ CSV parsing and validation logic
+  - ✅ UUID validation integration
 
-#### Task 5.2: Create Output Module
-- [ ] Create `artist_bio_gen/core/output.py`
-  - [ ] `write_jsonl_output()`
-  - [ ] Output formatting and file writing
+#### Task 5.2: Create Output Module ✅ **COMPLETED**
+- ✅ Create `artist_bio_gen/core/output.py`
+  - ✅ `write_jsonl_output()` (JSONL output generation)
+  - ✅ Output formatting and file writing
 
-#### Task 5.3: Create Processing Module
-- [ ] Create `artist_bio_gen/core/processor.py`
-  - [ ] `process_artists_concurrent()`
-  - [ ] Main processing coordination logic
-  - [ ] Progress tracking and statistics
+#### Task 5.3: Create Processing Module ✅ **COMPLETED**
+- ✅ Create `artist_bio_gen/core/processor.py`
+  - ✅ `process_artists_concurrent()` (concurrent processing coordination)
+  - ✅ `log_processing_start()`, `log_progress_update()`, `log_processing_summary()`
+  - ✅ `create_progress_bar()`, `calculate_processing_stats()`
+  - ✅ Update imports in main.py to use new core modules
 
 ### Phase 6: CLI Module Separation
 **Priority: Medium | Estimated Time: 2-3 hours**
