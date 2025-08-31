@@ -134,25 +134,26 @@ Refactor the monolithic `run_artists.py` script into separate, focused modules f
   - ✅ `create_progress_bar()`, `calculate_processing_stats()`
   - ✅ Update imports in main.py to use new core modules
 
-### Phase 6: CLI Module Separation
+### Phase 6: CLI Module Separation ✅ **COMPLETED**
 **Priority: Medium | Estimated Time: 2-3 hours**
 
-#### Task 6.1: Create Argument Parser Module
-- [ ] Create `artist_bio_gen/cli/__init__.py`
-- [ ] Create `artist_bio_gen/cli/parser.py`
-  - [ ] `create_argument_parser()`
-  - [ ] All CLI argument definitions and validation
+#### Task 6.1: Create Argument Parser Module ✅ **COMPLETED**
+- ✅ Create `artist_bio_gen/cli/__init__.py`
+- ✅ Create `artist_bio_gen/cli/parser.py`
+  - ✅ `create_argument_parser()` (complete CLI argument parser)
+  - ✅ All CLI argument definitions and validation
 
-#### Task 6.2: Create CLI Main Module
-- [ ] Create `artist_bio_gen/cli/main.py`
-  - [ ] `main()` function
-  - [ ] High-level application flow coordination
-  - [ ] Environment variable handling
+#### Task 6.2: Create CLI Main Module ✅ **COMPLETED**
+- ✅ Create `artist_bio_gen/cli/main.py`
+  - ✅ `main()` function (main application entry point)
+  - ✅ High-level application flow coordination
+  - ✅ `setup_logging()` (logging configuration)
 
-#### Task 6.3: Create CLI Utils Module
-- [ ] Create `artist_bio_gen/cli/utils.py`
-  - [ ] `apply_environment_defaults()`
-  - [ ] CLI-specific utility functions
+#### Task 6.3: Create CLI Utils Module ✅ **COMPLETED**
+- ✅ Create `artist_bio_gen/cli/utils.py`
+  - ✅ `apply_environment_defaults()` (environment variable handling)
+  - ✅ `_is_output_path_writable()` (path validation utility)
+  - ✅ Update imports in main.py to use new CLI modules
 
 ### Phase 7: Utilities Module Separation
 **Priority: Medium | Estimated Time: 1-2 hours**

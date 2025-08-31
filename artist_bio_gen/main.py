@@ -82,6 +82,14 @@ from .core import (
     calculate_processing_stats,
 )
 
+# Import CLI functions
+from .cli import (
+    main,
+    create_argument_parser,
+    apply_environment_defaults,
+    _is_output_path_writable,
+)
+
 # Import OpenAI for type annotations
 try:
     from openai import OpenAI
@@ -124,27 +132,6 @@ logger = logging.getLogger("__main__")
 # CLI Utility Functions
 
 
-def apply_environment_defaults(args):
-    """Apply environment variable defaults to parsed arguments."""
-    if args.prompt_id is None:
-        args.prompt_id = os.getenv("OPENAI_PROMPT_ID")
-    if not hasattr(args, 'db_url') or args.db_url is None:
-        args.db_url = os.getenv("DATABASE_URL")
-    return args
-
-
-def _is_output_path_writable(path_str: str) -> Tuple[bool, Optional[str]]:
-    """Check whether the output path's parent directory is writable without creating the file."""
-    try:
-        path = Path(path_str)
-        parent = path.parent if path.parent != Path("") else Path(".")
-        if not parent.exists():
-            return False, f"Output directory does not exist: {parent}"
-        if not os.access(parent, os.W_OK):
-            return False, f"No write permission for directory: {parent}"
-        return True, None
-    except Exception as e:
-        return False, f"Unable to validate output path '{path_str}': {e}"
 
 
 def log_processing_start(
@@ -507,187 +494,6 @@ def calculate_processing_stats(
         avg_time_per_artist=avg_time_per_artist,
         api_calls_per_second=api_calls_per_second,
     )
-
-
-def main():
-    """Main entry point for the script."""
-    parser = create_argument_parser()
-    args = parser.parse_args()
-
-    # Setup logging with verbose flag
-    setup_logging(verbose=args.verbose)
-
-    # Handle environment variable defaults
-    args = apply_environment_defaults(args)
-
-    try:
-        # Parse the input file
-        parse_result = parse_input_file(args.input_file)
-
-        if not parse_result.artists:
-            logger.error("No valid artists found in input file")
-            sys.exit(1)
-
-        if args.dry_run:
-            logger.info("=" * 70)
-            logger.info("DRY RUN MODE - SHOWING FIRST 5 ARTIST PAYLOADS")
-            logger.info("=" * 70)
-            for i, artist in enumerate(parse_result.artists[:5], 1):
-                payload = {"artist_name": artist.name, "artist_data": artist.data}
-                print(f"{i}. {json.dumps(payload, indent=2)}")
-
-            if len(parse_result.artists) > 5:
-                print(f"... and {len(parse_result.artists) - 5} more artists")
-
-            logger.info("=" * 70)
-            logger.info("DRY RUN COMPLETED SUCCESSFULLY")
-            logger.info("=" * 70)
-            return
-
-        # Validate required configuration
-        if not args.prompt_id:
-            logger.error(
-                "Prompt ID is required. Set OPENAI_PROMPT_ID environment variable or use --prompt-id"
-            )
-            sys.exit(EXIT_CONFIG_ERROR)
-
-        # Validate output path (non-destructive check)
-        if not args.dry_run:
-            ok, reason = _is_output_path_writable(args.output)
-            if not ok:
-                logger.error(f"Invalid output path: {reason}")
-                sys.exit(EXIT_INPUT_ERROR)
-
-        # Initialize OpenAI client
-        client = create_openai_client()
-
-        # Log processing start with enhanced details
-        start_time = log_processing_start(
-            total_artists=len(parse_result.artists),
-            input_file=args.input_file,
-            prompt_id=args.prompt_id,
-            max_workers=args.max_workers,
-        )
-
-        # Process artists concurrently
-        try:
-            successful_calls, failed_calls, all_responses = process_artists_concurrent(
-                artists=parse_result.artists,
-                client=client,
-                prompt_id=args.prompt_id,
-                version=args.version,
-                max_workers=args.max_workers,
-            )
-
-            # Write all responses to JSONL file
-            write_jsonl_output(
-                responses=all_responses,
-                output_path=args.output,
-                prompt_id=args.prompt_id,
-                version=args.version
-            )
-
-        except KeyboardInterrupt:
-            # Graceful interruption handling
-            end_time = time.time()
-            processed = successful_calls + failed_calls
-            stats = calculate_processing_stats(
-                total_artists=processed,
-                successful_calls=successful_calls,
-                failed_calls=failed_calls,
-                skipped_lines=parse_result.skipped_lines,
-                error_lines=parse_result.error_lines,
-                start_time=start_time,
-                end_time=end_time,
-            )
-            logger.warning("Processing interrupted by user (Ctrl+C). Partial summary:")
-            log_processing_summary(stats)
-            sys.exit(EXIT_INTERRUPTED)
-
-        # Calculate overall timing and statistics
-        end_time = time.time()
-        stats = calculate_processing_stats(
-            total_artists=len(parse_result.artists),
-            successful_calls=successful_calls,
-            failed_calls=failed_calls,
-            skipped_lines=parse_result.skipped_lines,
-            error_lines=parse_result.error_lines,
-            start_time=start_time,
-            end_time=end_time,
-        )
-
-        # Log comprehensive summary
-        log_processing_summary(stats)
-
-        # Exit with appropriate code
-        if failed_calls > 0:
-            logger.error(f"Processing completed with {failed_calls} failures")
-            sys.exit(EXIT_API_FAILURES)
-        else:
-            logger.info("🎉 All artists processed successfully!")
-
-    except (FileNotFoundError, UnicodeDecodeError, PermissionError) as e:
-        logger.error(f"Failed to process input file: {e}")
-        # Maintain legacy behavior expected by tests
-        sys.exit(1)
-    except Exception as e:
-        logger.error(f"Unexpected error: {e}")
-        sys.exit(EXIT_UNEXPECTED_ERROR)
-
-
-def create_argument_parser() -> argparse.ArgumentParser:
-    """Create and configure the argument parser."""
-    parser = argparse.ArgumentParser(
-        description="Generate artist bios using OpenAI Responses API",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-Examples:
-  python run_artists.py --input-file artists.csv --prompt-id prompt_123
-  python run_artists.py --input-file data.txt --max-workers 8
-  python run_artists.py --input-file artists.csv --dry-run
-        """,
-    )
-
-    # Required arguments
-    parser.add_argument(
-        "--input-file",
-        required=True,
-        help="CSV-like text file path containing artist data",
-    )
-
-    # Optional arguments with defaults
-    parser.add_argument(
-        "--prompt-id",
-        default=None,
-        help="OpenAI prompt ID (default: OPENAI_PROMPT_ID env var)",
-    )
-
-    parser.add_argument("--version", help="Prompt version (optional)")
-
-    parser.add_argument(
-        "--output",
-        default="out.jsonl",
-        help="JSONL output file path (default: out.jsonl)",
-    )
-
-    parser.add_argument(
-        "--max-workers",
-        type=int,
-        default=4,
-        help="Maximum number of concurrent requests (default: 4)",
-    )
-
-    parser.add_argument(
-        "--dry-run",
-        action="store_true",
-        help="Parse inputs and show first 5 payloads without making API calls",
-    )
-
-    parser.add_argument(
-        "--verbose", action="store_true", help="Enable verbose logging (DEBUG level)"
-    )
-
-    return parser
 
 
 if __name__ == "__main__":

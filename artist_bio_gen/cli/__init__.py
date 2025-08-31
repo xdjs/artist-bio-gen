@@ -1,9 +1,30 @@
 #!/usr/bin/env python3
 """
-Command Line Interface Module
+CLI package for artist bio generator.
 
-This module contains the command-line interface components including
-argument parsing and main application entry point.
+This package provides command-line interface components including
+argument parsing, main application flow, and CLI utilities.
 """
 
-__all__ = []
+from .parser import (
+    create_argument_parser,
+)
+
+from .main import (
+    main,
+)
+
+from .utils import (
+    apply_environment_defaults,
+    _is_output_path_writable,
+)
+
+__all__ = [
+    # Argument parsing
+    "create_argument_parser",
+    # Main application flow
+    "main",
+    # CLI utilities
+    "apply_environment_defaults",
+    "_is_output_path_writable",
+]
