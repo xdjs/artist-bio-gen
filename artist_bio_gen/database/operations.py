@@ -14,7 +14,7 @@ from ..models import DatabaseResult
 from .utils import classify_database_error, validate_uuid
 
 try:
-    import psycopg3
+    import psycopg as psycopg3
 except ImportError:
     psycopg3 = None
 

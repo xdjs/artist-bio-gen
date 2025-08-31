@@ -31,6 +31,13 @@ from ..api import (
     create_openai_client,
 )
 
+from ..database import (
+    create_db_connection_pool,
+    get_database_url_from_env,
+    create_database_config,
+    close_db_connection_pool,
+)
+
 from .parser import (
     create_argument_parser,
 )
@@ -96,6 +103,22 @@ def main():
         # Initialize OpenAI client
         client = create_openai_client()
 
+        # Initialize database connection if enabled
+        db_pool = None
+        if args.enable_db:
+            try:
+                db_url = get_database_url_from_env(test_mode=args.test_mode)
+                if not db_url:
+                    logger.error("Database URL not found. Set DATABASE_URL environment variable.")
+                    sys.exit(EXIT_CONFIG_ERROR)
+                
+                db_config = create_database_config(url=db_url, test_mode=args.test_mode)
+                db_pool = create_db_connection_pool(db_config)
+                logger.info(f"Database connection initialized {'(test mode)' if args.test_mode else ''}")
+            except Exception as e:
+                logger.error(f"Failed to initialize database connection: {e}")
+                sys.exit(EXIT_CONFIG_ERROR)
+
         # Log processing start with enhanced details
         start_time = log_processing_start(
             total_artists=len(parse_result.artists),
@@ -112,6 +135,8 @@ def main():
                 prompt_id=args.prompt_id,
                 version=args.version,
                 max_workers=args.max_workers,
+                db_pool=db_pool,
+                test_mode=args.test_mode,
             )
 
             # Write all responses to JSONL file
@@ -168,3 +193,10 @@ def main():
     except Exception as e:
         logger.error(f"Unexpected error: {e}")
         sys.exit(EXIT_UNEXPECTED_ERROR)
+    finally:
+        # Clean up database connection pool
+        if 'db_pool' in locals() and db_pool is not None:
+            try:
+                close_db_connection_pool(db_pool)
+            except Exception as e:
+                logger.warning(f"Error closing database connection pool: {e}")

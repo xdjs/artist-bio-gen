@@ -14,6 +14,7 @@ from typing import List, Optional, Tuple
 from ..models import ArtistData, ApiResponse, ProcessingStats
 from ..api import call_openai_api
 from ..utils import create_progress_bar
+from ..database import get_db_connection
 
 try:
     from openai import OpenAI
@@ -194,6 +195,8 @@ def process_artists_concurrent(
     prompt_id: str,
     version: Optional[str],
     max_workers: int,
+    db_pool: Optional[object] = None,
+    test_mode: bool = False,
 ) -> Tuple[int, int, List[ApiResponse]]:
     """
     Process artists concurrently using ThreadPoolExecutor with enhanced error isolation.
@@ -204,6 +207,8 @@ def process_artists_concurrent(
         prompt_id: OpenAI prompt ID
         version: Optional prompt version
         max_workers: Maximum number of concurrent workers
+        db_pool: Database connection pool for bio updates (optional)
+        test_mode: If True, use test_artists table
 
     Returns:
         Tuple of (successful_calls, failed_calls, all_responses)
@@ -226,8 +231,25 @@ def process_artists_concurrent(
         future_to_worker = {}
         for i, artist in enumerate(artists):
             worker_id = f"W{i % max_workers + 1:02d}"  # W01, W02, W03, etc.
+            
+            # Get database connection if pool is provided
+            db_connection = None
+            if db_pool is not None:
+                try:
+                    db_connection = get_db_connection(db_pool)
+                except Exception as e:
+                    logger.warning(f"Failed to get database connection for {artist.name}: {e}")
+            
             future = executor.submit(
-                call_openai_api, client, artist, prompt_id, version, worker_id
+                call_openai_api, 
+                client, 
+                artist, 
+                prompt_id, 
+                version, 
+                worker_id,
+                db_connection,
+                False,  # skip_existing
+                test_mode
             )
             future_to_artist[future] = artist
             future_to_worker[future] = worker_id

@@ -60,4 +60,16 @@ Examples:
         "--verbose", action="store_true", help="Enable verbose logging (DEBUG level)"
     )
 
+    parser.add_argument(
+        "--enable-db",
+        action="store_true",
+        help="Enable database updates (requires DATABASE_URL env var)"
+    )
+
+    parser.add_argument(
+        "--test-mode",
+        action="store_true", 
+        help="Use test_artists table instead of artists table"
+    )
+
     return parser

@@ -11,16 +11,18 @@ from typing import Optional
 from ..models import DatabaseConfig
 
 try:
-    import psycopg3
-    from psycopg3 import pool
+    import psycopg as psycopg3
+    from psycopg_pool import ConnectionPool
+    pool = True  # Mark that pool functionality is available
 except ImportError:
     psycopg3 = None
+    ConnectionPool = None
     pool = None
 
 logger = logging.getLogger(__name__)
 
 
-def create_db_connection_pool(config: DatabaseConfig) -> Optional["psycopg3.Pool"]:
+def create_db_connection_pool(config: DatabaseConfig) -> Optional["ConnectionPool"]:
     """
     Create a database connection pool.
 
@@ -45,11 +47,11 @@ def create_db_connection_pool(config: DatabaseConfig) -> Optional["psycopg3.Pool
         )
 
         # Create connection pool
-        connection_pool = psycopg3.pool.ConnectionPool(
+        connection_pool = ConnectionPool(
             config.url,
             min_size=1,  # Minimum connections to keep open
             max_size=config.pool_size + config.max_overflow,
-            timeout=config.connection_timeout,
+            open=True,  # Open the pool immediately
         )
 
         logger.info("Database connection pool created successfully")
@@ -60,7 +62,7 @@ def create_db_connection_pool(config: DatabaseConfig) -> Optional["psycopg3.Pool
         raise
 
 
-def get_db_connection(pool: "psycopg3.Pool") -> Optional["psycopg3.Connection"]:
+def get_db_connection(pool: "ConnectionPool") -> Optional["psycopg3.Connection"]:
     """
     Get a database connection from the pool.
 
@@ -84,7 +86,7 @@ def get_db_connection(pool: "psycopg3.Pool") -> Optional["psycopg3.Connection"]:
         return None
 
 
-def close_db_connection_pool(pool: "psycopg3.Pool") -> None:
+def close_db_connection_pool(pool: "ConnectionPool") -> None:
     """
     Close the database connection pool.
 

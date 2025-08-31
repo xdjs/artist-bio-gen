@@ -106,10 +106,7 @@ def create_database_config(
         query_timeout if query_timeout is not None else DEFAULT_QUERY_TIMEOUT
     )
 
-    # Adjust defaults for test mode (smaller pool for tests)
-    if test_mode:
-        final_pool_size = min(final_pool_size, 2)
-        final_max_overflow = min(final_max_overflow, 2)
+    # Test mode no longer restricts pool size - use full defaults
 
     # Validate configuration values
     if final_pool_size < 1:
@@ -146,23 +143,15 @@ def get_database_url_from_env(test_mode: bool = False) -> Optional[str]:
     Get database URL from environment variables.
 
     Args:
-        test_mode: If True, look for TEST_DATABASE_URL first, then DATABASE_URL
+        test_mode: Unused parameter (kept for backward compatibility)
 
     Returns:
         Database URL string or None if not found
     """
-    if test_mode:
-        # Try TEST_DATABASE_URL first for test mode
-        test_url = os.getenv("TEST_DATABASE_URL")
-        if test_url:
-            logger.debug("Using TEST_DATABASE_URL from environment")
-            return test_url
-
-    # Use standard DATABASE_URL
+    # Always use standard DATABASE_URL regardless of test mode
     url = os.getenv("DATABASE_URL")
     if url:
-        env_var_name = "DATABASE_URL"
-        logger.debug(f"Using {env_var_name} from environment")
+        logger.debug("Using DATABASE_URL from environment")
         return url
 
     logger.error("No database URL found. Set DATABASE_URL environment variable.")

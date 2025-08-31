@@ -43,18 +43,40 @@ artist_bio_gen/
 
 ## 📋 Requirements
 
-- Python 3.11+
-- OpenAI API key
-- Valid OpenAI prompt ID
-- PostgreSQL database (for bio persistence)
+- **Python**: 3.11 or higher
+- **OpenAI API Access**: Valid API key and prompt ID
+- **PostgreSQL Database**: For bio persistence (optional)
+- **Python Packages**: Listed in `requirements.txt`
 
-## 🛠️ Installation
+## 🛠️ Installation & Setup
 
-1. **Clone or download the project files**
-2. **Install dependencies:**
-   ```bash
-   pip install -r requirements.txt
-   ```
+### 1. **Clone or download the project files**
+
+### 2. **Install Python dependencies:**
+
+**Option A: Install all dependencies at once**
+```bash
+pip install -r requirements.txt
+```
+
+**Option B: Install dependencies individually**
+```bash
+# Core runtime dependencies
+pip install "openai>=1.0.0"
+pip install "psycopg[binary,pool]>=3.2.0"  # For database connectivity
+pip install "python-dotenv>=1.0.0"         # For .env file support
+pip install "tenacity>=8.0.0"              # For retry logic
+pip install "aiohttp>=3.8.0"               # For async HTTP
+
+# Development dependencies (optional)
+pip install "pytest>=7.0.0"                # For running tests
+pip install "black>=23.0.0"                # For code formatting
+pip install "mypy>=1.0.0"                  # For type checking
+```
+
+**Note:** The `psycopg[binary,pool]` package is required for database functionality. The `[binary,pool]` extras provide:
+- `binary`: Pre-compiled PostgreSQL adapter for better performance
+- `pool`: Connection pooling support for concurrent database operations
 
 3. **Set up environment variables:**
    ```bash
@@ -73,10 +95,23 @@ artist_bio_gen/
 4. **Set up PostgreSQL database:**
    ```sql
    CREATE DATABASE artist_bios;
+   
+   -- Production table
    CREATE TABLE artists (
-     id UUID PRIMARY KEY,
+     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
      name TEXT NOT NULL,
-     bio TEXT
+     bio TEXT,
+     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+   );
+   
+   -- Test table (optional, for --test-mode)
+   CREATE TABLE test_artists (
+     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+     name VARCHAR(255) NOT NULL,
+     bio TEXT,
+     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
    );
    ```
 
@@ -97,6 +132,8 @@ python3 run_artists.py --input-file artists.csv --prompt-id your-prompt-id
 | `--version` | Prompt version | None | ❌ |
 | `--output` | JSONL output file path | `out.jsonl` | ❌ |
 | `--max-workers` | Max concurrent requests | `4` | ❌ |
+| `--enable-db` | Enable database bio updates | `False` | ❌ |
+| `--test-mode` | Use test_artists table | `False` | ❌ |
 | `--dry-run` | Parse inputs without API calls | `False` | ❌ |
 | `--verbose` | Enable debug logging | `False` | ❌ |
 
@@ -120,6 +157,16 @@ python3 run_artists.py --input-file artists.csv --prompt-id prompt_123 --dry-run
 **Verbose logging for debugging:**
 ```bash
 python3 run_artists.py --input-file artists.csv --prompt-id prompt_123 --verbose
+```
+
+**With database updates enabled:**
+```bash
+python3 run_artists.py --input-file artists.csv --prompt-id prompt_123 --enable-db --verbose
+```
+
+**Testing with test database table:**
+```bash
+python3 run_artists.py --input-file test_artists.csv --prompt-id prompt_123 --enable-db --test-mode --verbose
 ```
 
 ### Library Usage
