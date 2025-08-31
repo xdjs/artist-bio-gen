@@ -1,9 +1,38 @@
 #!/usr/bin/env python3
 """
-Core Business Logic Module
+Core package for artist bio generator.
 
-This module contains the core business logic for the artist bio generator,
-including input parsing, processing coordination, and output generation.
+This package provides core business logic including input parsing,
+processing coordination, and output generation for the artist bio generator.
 """
 
-__all__ = []
+from .parser import (
+    parse_input_file,
+)
+
+from .output import (
+    write_jsonl_output,
+)
+
+from .processor import (
+    process_artists_concurrent,
+    create_progress_bar,
+    log_progress_update,
+    log_processing_start,
+    log_processing_summary,
+    calculate_processing_stats,
+)
+
+__all__ = [
+    # Input parsing
+    "parse_input_file",
+    # Output generation
+    "write_jsonl_output",
+    # Processing coordination
+    "process_artists_concurrent",
+    "create_progress_bar",
+    "log_progress_update",
+    "log_processing_start",
+    "log_processing_summary",
+    "calculate_processing_stats",
+]
