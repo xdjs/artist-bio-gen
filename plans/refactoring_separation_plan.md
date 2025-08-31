@@ -155,27 +155,25 @@ Refactor the monolithic `run_artists.py` script into separate, focused modules f
   - ✅ `_is_output_path_writable()` (path validation utility)
   - ✅ Update imports in main.py to use new CLI modules
 
-### Phase 7: Utilities Module Separation
+### Phase 7: Utilities Module Separation ✅ **COMPLETED**
 **Priority: Medium | Estimated Time: 1-2 hours**
 
-#### Task 7.1: Create Logging Utils Module
-- [ ] Create `artist_bio_gen/utils/__init__.py`
-- [ ] Create `artist_bio_gen/utils/logging.py`
-  - [ ] `setup_logging()`
-  - [ ] `log_processing_start()`
-  - [ ] `log_progress_update()`
-  - [ ] `log_processing_summary()`
+#### Task 7.1: Create Logging Utils Module ✅ **COMPLETED**
+- ✅ Create `artist_bio_gen/utils/__init__.py`
+- ✅ Create `artist_bio_gen/utils/logging.py`
+  - ✅ `setup_logging()` (centralized logging configuration)
 
-#### Task 7.2: Create General Utils Module
-- [ ] Create `artist_bio_gen/utils/helpers.py`
-  - [ ] `create_progress_bar()`
-  - [ ] `calculate_processing_stats()`
-  - [ ] Other utility functions
+#### Task 7.2: Create General Utils Module ✅ **COMPLETED**
+- ✅ Create `artist_bio_gen/utils/helpers.py`
+  - ✅ `create_progress_bar()` (text-based progress bar)
+  - ✅ Other general utility functions
 
-#### Task 7.3: Create Validation Utils Module
-- [ ] Create `artist_bio_gen/utils/validation.py`
-  - [ ] `_is_output_path_writable()`
-  - [ ] Input validation helpers
+#### Task 7.3: Create Validation Utils Module ✅ **COMPLETED**
+- ✅ Create `artist_bio_gen/utils/validation.py`
+  - ✅ `_is_output_path_writable()` (path validation)
+  - ✅ `apply_environment_defaults()` (environment variable handling)
+  - ✅ Update imports across modules to use new utils modules
+  - ✅ Remove duplicate utility functions from CLI and other modules
 
 ### Phase 8: Integration & Coordination
 **Priority: High | Estimated Time: 2-3 hours**

@@ -75,7 +75,6 @@ from .core import (
     parse_input_file,
     write_jsonl_output,
     process_artists_concurrent,
-    create_progress_bar,
     log_progress_update,
     log_processing_start,
     log_processing_summary,
@@ -86,6 +85,12 @@ from .core import (
 from .cli import (
     main,
     create_argument_parser,
+)
+
+# Import utilities
+from .utils import (
+    setup_logging,
+    create_progress_bar,
     apply_environment_defaults,
     _is_output_path_writable,
 )
@@ -114,18 +119,6 @@ except ImportError:
 
 
 # Configure logging
-def setup_logging(verbose: bool = False):
-    """Setup logging configuration with appropriate level and format."""
-    level = logging.DEBUG if verbose else logging.INFO
-    format_string = "%(asctime)s - %(levelname)s - %(message)s"
-
-    logging.basicConfig(level=level, format=format_string, datefmt="%Y-%m-%d %H:%M:%S")
-
-    # Set specific logger levels
-    logging.getLogger("openai").setLevel(logging.WARNING)  # Reduce OpenAI client noise
-    logging.getLogger("urllib3").setLevel(logging.WARNING)  # Reduce HTTP client noise
-
-
 setup_logging()
 logger = logging.getLogger("__main__")
 
@@ -165,25 +158,6 @@ def log_processing_start(
     return start_time
 
 
-def create_progress_bar(current: int, total: int, width: int = 30) -> str:
-    """
-    Create a text-based progress bar.
-
-    Args:
-        current: Current progress (1-based)
-        total: Total items
-        width: Width of the progress bar
-
-    Returns:
-        Progress bar string
-    """
-    if total == 0:
-        return "[" + " " * width + "]"
-
-    percentage = current / total
-    filled = int(width * percentage)
-    bar = "█" * filled + "░" * (width - filled)
-    return f"[{bar}]"
 
 
 def log_progress_update(

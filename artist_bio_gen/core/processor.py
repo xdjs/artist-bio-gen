@@ -13,6 +13,7 @@ from typing import List, Optional, Tuple
 
 from ..models import ArtistData, ApiResponse, ProcessingStats
 from ..api import call_openai_api
+from ..utils import create_progress_bar
 
 try:
     from openai import OpenAI
@@ -53,25 +54,6 @@ def log_processing_start(
     return start_time
 
 
-def create_progress_bar(current: int, total: int, width: int = 30) -> str:
-    """
-    Create a text-based progress bar.
-
-    Args:
-        current: Current progress (1-based)
-        total: Total items
-        width: Width of the progress bar
-
-    Returns:
-        Progress bar string
-    """
-    if total == 0:
-        return "[" + " " * width + "]"
-
-    percentage = current / total
-    filled = int(width * percentage)
-    bar = "█" * filled + "░" * (width - filled)
-    return f"[{bar}]"
 
 
 def log_progress_update(

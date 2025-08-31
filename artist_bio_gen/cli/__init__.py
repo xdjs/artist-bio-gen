@@ -14,17 +14,9 @@ from .main import (
     main,
 )
 
-from .utils import (
-    apply_environment_defaults,
-    _is_output_path_writable,
-)
-
 __all__ = [
     # Argument parsing
     "create_argument_parser",
     # Main application flow
     "main",
-    # CLI utilities
-    "apply_environment_defaults",
-    "_is_output_path_writable",
 ]

@@ -16,7 +16,6 @@ from .output import (
 
 from .processor import (
     process_artists_concurrent,
-    create_progress_bar,
     log_progress_update,
     log_processing_start,
     log_processing_summary,
@@ -30,7 +29,6 @@ __all__ = [
     "write_jsonl_output",
     # Processing coordination
     "process_artists_concurrent",
-    "create_progress_bar",
     "log_progress_update",
     "log_processing_start",
     "log_processing_summary",

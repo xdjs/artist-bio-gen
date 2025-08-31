@@ -1,8 +1,8 @@
 """
-CLI utilities module.
+Validation utilities for the artist bio generator.
 
-This module provides utility functions for CLI operations including
-environment variable handling and path validation.
+This module provides validation functions for paths, environment variables,
+and other data validation needs across the application.
 """
 
 import os

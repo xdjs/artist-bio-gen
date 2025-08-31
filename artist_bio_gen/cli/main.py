@@ -35,7 +35,8 @@ from .parser import (
     create_argument_parser,
 )
 
-from .utils import (
+from ..utils import (
+    setup_logging,
     apply_environment_defaults,
     _is_output_path_writable,
 )
@@ -43,16 +44,6 @@ from .utils import (
 logger = logging.getLogger(__name__)
 
 
-def setup_logging(verbose: bool = False):
-    """Setup logging configuration with appropriate level and format."""
-    level = logging.DEBUG if verbose else logging.INFO
-    format_string = "%(asctime)s - %(levelname)s - %(message)s"
-
-    logging.basicConfig(level=level, format=format_string, datefmt="%Y-%m-%d %H:%M:%S")
-
-    # Set specific logger levels
-    logging.getLogger("openai").setLevel(logging.WARNING)  # Reduce OpenAI client noise
-    logging.getLogger("urllib3").setLevel(logging.WARNING)  # Reduce HTTP client noise
 
 
 def main():
