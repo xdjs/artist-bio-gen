@@ -91,24 +91,26 @@ Refactor the monolithic `run_artists.py` script into separate, focused modules f
 - ✅ Move database-specific utility functions (`classify_database_error()`, `validate_uuid()`)
 - ✅ Update imports in main.py to use new database modules
 
-### Phase 4: API Module Separation  
+### Phase 4: API Module Separation ✅ **COMPLETED**
 **Priority: High | Estimated Time: 1-2 hours**
 
-#### Task 4.1: Create OpenAI API Module
-- [ ] Create `artist_bio_gen/api/__init__.py`
-- [ ] Create `artist_bio_gen/api/client.py`
-  - [ ] `create_openai_client()`
-  - [ ] Client configuration and setup
+#### Task 4.1: Create OpenAI API Module ✅ **COMPLETED**
+- ✅ Create `artist_bio_gen/api/__init__.py`
+- ✅ Create `artist_bio_gen/api/client.py`
+  - ✅ `create_openai_client()`
+  - ✅ Client configuration and setup
 
-#### Task 4.2: Create API Operations Module
-- [ ] Create `artist_bio_gen/api/operations.py`
-  - [ ] `call_openai_api()` (core API calling logic)
-  - [ ] API response handling and processing
+#### Task 4.2: Create API Operations Module ✅ **COMPLETED**
+- ✅ Create `artist_bio_gen/api/operations.py`
+  - ✅ `call_openai_api()` (core API calling logic)
+  - ✅ API response handling and processing
 
-#### Task 4.3: Create API Utils Module
-- [ ] Create `artist_bio_gen/api/utils.py`
-  - [ ] `should_retry_error()`
-  - [ ] API-specific utility functions
+#### Task 4.3: Create API Utils Module ✅ **COMPLETED**
+- ✅ Create `artist_bio_gen/api/utils.py`
+  - ✅ `should_retry_error()` (error classification)
+  - ✅ `calculate_retry_delay()` (exponential backoff with jitter)
+  - ✅ `retry_with_exponential_backoff()` (decorator for retry logic)
+  - ✅ Update imports in main.py to use new API modules
 
 ### Phase 5: Input/Output Module Separation
 **Priority: High | Estimated Time: 2-3 hours**
