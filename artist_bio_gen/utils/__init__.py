@@ -15,9 +15,11 @@ from .helpers import create_progress_bar
 
 # Validation utilities
 from .validation import _is_output_path_writable
+from .text import strip_trailing_citations
 
 __all__ = [
     "setup_logging",
     "create_progress_bar",
     "_is_output_path_writable",
+    "strip_trailing_citations",
 ]
