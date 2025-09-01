@@ -72,6 +72,12 @@ Examples:
         help="Use test_artists table instead of artists table"
     )
 
+    parser.add_argument(
+        "--stream-output",
+        action="store_true",
+        help="Stream JSONL output as responses complete (saves memory for large datasets)"
+    )
+
     # Environment variable overrides
     parser.add_argument(
         "--openai-api-key",
