@@ -68,6 +68,7 @@ def _create_jsonl_record(
     """
     # Build the JSONL record
     record = {
+        "artist_id": response.artist_id,  # Include artist_id for resume functionality
         "artist_name": response.artist_name,
         "request": {
             "prompt_id": prompt_id,
@@ -83,6 +84,7 @@ def _create_jsonl_record(
         "response_text": response.response_text,
         "response_id": response.response_id,
         "created": response.created,
+        "db_status": response.db_status,
         "error": response.error,
     }
 
