@@ -15,6 +15,7 @@ from ..models import ArtistData, ApiResponse, ProcessingStats
 from ..api import call_openai_api
 from ..utils import create_progress_bar
 from ..database import get_db_connection, release_db_connection
+from .output import append_jsonl_response, initialize_jsonl_output
 
 try:
     from openai import OpenAI
@@ -197,6 +198,8 @@ def process_artists_concurrent(
     max_workers: int,
     db_pool: Optional[object] = None,
     test_mode: bool = False,
+    output_path: Optional[str] = None,
+    stream_output: bool = False,
 ) -> Tuple[int, int, List[ApiResponse]]:
     """
     Process artists concurrently using ThreadPoolExecutor with enhanced error isolation.
@@ -209,13 +212,26 @@ def process_artists_concurrent(
         max_workers: Maximum number of concurrent workers
         db_pool: Database connection pool for bio updates (optional)
         test_mode: If True, use test_artists table
+        output_path: Path to JSONL output file for streaming writes (optional)
+        stream_output: If True, write responses to JSONL immediately after DB commit
 
     Returns:
         Tuple of (successful_calls, failed_calls, all_responses)
+        Note: If stream_output=True, all_responses will be empty to save memory
     """
     successful_calls = 0
     failed_calls = 0
     all_responses = []
+
+    # Initialize streaming output file if streaming is enabled
+    if stream_output and output_path:
+        try:
+            initialize_jsonl_output(output_path, overwrite_existing=True)
+            logger.info(f"Initialized streaming JSONL output: {output_path}")
+        except Exception as e:
+            logger.error(f"Failed to initialize streaming output file: {e}")
+            # Continue without streaming rather than failing completely
+            stream_output = False
 
     logger.info(f"Starting concurrent processing with {max_workers} workers")
 
@@ -262,12 +278,15 @@ def process_artists_concurrent(
             worker_id = future_to_worker[future]
             try:
                 api_response, duration = future.result()
-                all_responses.append(api_response)
+                
+                # Only accumulate responses in memory if not streaming (to save memory)
+                if not stream_output:
+                    all_responses.append(api_response)
 
                 if api_response.error:
                     failed_calls += 1
                     log_progress_update(
-                        len(all_responses),
+                        successful_calls + failed_calls,
                         len(artists),
                         artist.name,
                         False,
@@ -276,8 +295,17 @@ def process_artists_concurrent(
                     )
                 else:
                     successful_calls += 1
+                    
+                    # Stream to JSONL file immediately if streaming is enabled
+                    if stream_output and output_path:
+                        try:
+                            append_jsonl_response(api_response, output_path, prompt_id, version)
+                            logger.debug(f"Streamed response for '{artist.name}' to {output_path}")
+                        except Exception as e:
+                            logger.error(f"Failed to stream response for '{artist.name}': {e}")
+                    
                     log_progress_update(
-                        len(all_responses),
+                        successful_calls + failed_calls,
                         len(artists),
                         artist.name,
                         True,
@@ -302,9 +330,21 @@ def process_artists_concurrent(
                     created=0,
                     error=error_msg,
                 )
-                all_responses.append(error_response)
+                
+                # Only accumulate responses in memory if not streaming
+                if not stream_output:
+                    all_responses.append(error_response)
+                
+                # Stream error responses too if streaming is enabled
+                if stream_output and output_path:
+                    try:
+                        append_jsonl_response(error_response, output_path, prompt_id, version)
+                        logger.debug(f"Streamed error response for '{artist.name}' to {output_path}")
+                    except Exception as stream_e:
+                        logger.error(f"Failed to stream error response for '{artist.name}': {stream_e}")
+                
                 log_progress_update(
-                    len(all_responses), len(artists), artist.name, False, 0.0, worker_id
+                    successful_calls + failed_calls, len(artists), artist.name, False, 0.0, worker_id
                 )
                 logger.error(
                     f"[{worker_id}] Thread error processing artist '{artist.name}': {error_msg}"
@@ -319,24 +359,25 @@ def process_artists_concurrent(
 
             # Log periodic progress updates during concurrent processing
             current_time = time.time()
+            total_processed = successful_calls + failed_calls
             if (
-                len(all_responses) % progress_interval == 0
-                or len(all_responses) == len(artists)
+                total_processed % progress_interval == 0
+                or total_processed == len(artists)
                 or current_time - last_progress_time >= 5.0
             ):  # At least every 5 seconds
 
                 elapsed_time = current_time - last_progress_time
                 current_rate = (
-                    len(all_responses) / elapsed_time if elapsed_time > 0 else 0
+                    total_processed / elapsed_time if elapsed_time > 0 else 0
                 )
-                remaining_artists = len(artists) - len(all_responses)
+                remaining_artists = len(artists) - total_processed
                 estimated_remaining_time = (
                     remaining_artists / current_rate if current_rate > 0 else 0
                 )
 
                 logger.info(
-                    f"📊 Concurrent Progress: {len(all_responses)}/{len(artists)} artists processed "
-                    f"({(len(all_responses)/len(artists)*100):.1f}%) - "
+                    f"📊 Concurrent Progress: {total_processed}/{len(artists)} artists processed "
+                    f"({(total_processed/len(artists)*100):.1f}%) - "
                     f"Rate: {current_rate:.2f} artists/sec - "
                     f"ETA: {estimated_remaining_time:.0f}s remaining"
                 )
