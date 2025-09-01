@@ -12,6 +12,8 @@ from .parser import (
 
 from .output import (
     write_jsonl_output,
+    append_jsonl_response,
+    initialize_jsonl_output,
 )
 
 from .processor import (
@@ -27,6 +29,8 @@ __all__ = [
     "parse_input_file",
     # Output generation
     "write_jsonl_output",
+    "append_jsonl_response",
+    "initialize_jsonl_output",
     # Processing coordination
     "process_artists_concurrent",
     "log_progress_update",

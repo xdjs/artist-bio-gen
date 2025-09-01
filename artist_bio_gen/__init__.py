@@ -48,6 +48,8 @@ from .constants import (
 from .core import (
     parse_input_file,
     write_jsonl_output,
+    append_jsonl_response,
+    initialize_jsonl_output,
     process_artists_concurrent,
 )
 
@@ -103,6 +105,8 @@ __all__ = [
     # Core functionality
     "parse_input_file",
     "write_jsonl_output",
+    "append_jsonl_response",
+    "initialize_jsonl_output",
     "process_artists_concurrent",
     # API functions
     "create_openai_client",
