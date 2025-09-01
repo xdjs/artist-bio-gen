@@ -10,6 +10,7 @@ import time
 from typing import Optional, Tuple
 
 from ..models import ArtistData, ApiResponse
+from ..utils import strip_trailing_citations
 from ..database import update_artist_bio
 from .utils import retry_with_exponential_backoff
 
@@ -74,8 +75,14 @@ def call_openai_api(
         # Make the API call
         response = client.responses.create(prompt=prompt_config)
 
-        # Extract response data
-        response_text = response.output_text
+        # Extract and clean response text
+        raw_text = response.output_text
+        cleaned_text = strip_trailing_citations(raw_text)
+        if cleaned_text != raw_text:
+            logger.info(
+                f"[{worker_id}] ✂️ Stripped trailing citations from API response for {artist.name}"
+            )
+        response_text = cleaned_text
         response_id = response.id
         created = int(response.created_at)
 
