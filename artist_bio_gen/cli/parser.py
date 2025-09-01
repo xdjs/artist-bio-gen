@@ -72,6 +72,13 @@ Examples:
         help="Use test_artists table instead of artists table"
     )
 
+    parser.add_argument(
+        "--resume",
+        action="store_true",
+        help="Resume processing by skipping artists already present in output file"
+    )
+
+
     # Environment variable overrides
     parser.add_argument(
         "--openai-api-key",

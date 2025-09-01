@@ -11,6 +11,7 @@ from typing import Optional, Tuple
 
 from ..models import ArtistData, ApiResponse
 from ..utils import strip_trailing_citations
+from ..utils.logging import log_transaction_success, log_transaction_failure
 from ..database import update_artist_bio
 from .utils import retry_with_exponential_backoff
 
@@ -125,6 +126,32 @@ def call_openai_api(
                 logger.error(
                     f"[{worker_id}] 💥 Database update error for {artist.name}: {str(db_error)}"
                 )
+        
+        # Log structured transaction information for database operations
+        if db_connection is not None:
+            if db_status in ["updated", "skipped"]:
+                # Log successful transaction (including skipped as successful completion)
+                log_transaction_success(
+                    artist_id=artist.artist_id,
+                    artist_name=artist.name,
+                    worker_id=worker_id,
+                    processing_duration=duration,
+                    db_status=db_status,
+                    response_id=response_id,
+                    timestamp=end_time,
+                    logger=logger
+                )
+            elif db_status == "error":
+                # Log failed database transaction
+                log_transaction_failure(
+                    artist_id=artist.artist_id,
+                    artist_name=artist.name,
+                    worker_id=worker_id,
+                    processing_duration=duration,
+                    error_message=f"Database operation failed: {db_status}",
+                    timestamp=end_time,
+                    logger=logger
+                )
 
         api_response = ApiResponse(
             artist_id=artist.artist_id,
@@ -158,6 +185,17 @@ def call_openai_api(
             created=0,
             db_status="null",  # No database operation on API error
             error=error_msg,
+        )
+
+        # Log transaction failure for complete API errors
+        log_transaction_failure(
+            artist_id=artist.artist_id,
+            artist_name=artist.name,
+            worker_id=worker_id,
+            processing_duration=duration,
+            error_message=error_msg,
+            timestamp=end_time,
+            logger=logger
         )
 
         logger.error(

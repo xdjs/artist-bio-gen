@@ -4,8 +4,10 @@ Tests that database connections acquired for tasks are returned to the pool
 after processing, for both success and failure paths.
 """
 
+import tempfile
 import time
 import unittest
+import os
 from unittest.mock import patch
 
 from artist_bio_gen.core.processor import process_artists_concurrent
@@ -58,23 +60,32 @@ class TestProcessorDbPool(unittest.TestCase):
                 0.01,
             )
 
-        with patch("artist_bio_gen.core.processor.call_openai_api", side_effect=fake_call_openai_api):
-            success, failed, responses = process_artists_concurrent(
-                artists=artists,
-                client=object(),
-                prompt_id="pid",
-                version=None,
-                max_workers=2,
-                db_pool=pool,
-                test_mode=False,
-            )
+        # Create temporary JSONL output file
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.jsonl', delete=False) as f:
+            output_path = f.name
+        
+        try:
+            with patch("artist_bio_gen.core.processor.call_openai_api", side_effect=fake_call_openai_api):
+                success, failed = process_artists_concurrent(
+                    artists=artists,
+                    client=object(),
+                    prompt_id="pid",
+                    version=None,
+                    max_workers=2,
+                    output_path=output_path,
+                    db_pool=pool,
+                    test_mode=False,
+                )
 
-        self.assertEqual(success, len(artists))
-        self.assertEqual(failed, 0)
-        self.assertEqual(len(responses), len(artists))
-        self.assertEqual(pool.get_count, len(artists))
-        self.assertEqual(pool.put_count, len(artists))
-        self.assertEqual(len(pool.released), len(artists))
+            self.assertEqual(success, len(artists))
+            self.assertEqual(failed, 0)
+            self.assertEqual(pool.get_count, len(artists))
+            self.assertEqual(pool.put_count, len(artists))
+            self.assertEqual(len(pool.released), len(artists))
+        finally:
+            # Clean up temporary file
+            if os.path.exists(output_path):
+                os.unlink(output_path)
 
     def test_connections_released_on_failure(self):
         artists = _make_artists(3)
@@ -83,23 +94,32 @@ class TestProcessorDbPool(unittest.TestCase):
         def fake_call_openai_api_fail(*args, **kwargs):
             raise RuntimeError("boom")
 
-        with patch("artist_bio_gen.core.processor.call_openai_api", side_effect=fake_call_openai_api_fail):
-            success, failed, responses = process_artists_concurrent(
-                artists=artists,
-                client=object(),
-                prompt_id="pid",
-                version=None,
-                max_workers=2,
-                db_pool=pool,
-                test_mode=False,
-            )
+        # Create temporary JSONL output file
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.jsonl', delete=False) as f:
+            output_path = f.name
+        
+        try:
+            with patch("artist_bio_gen.core.processor.call_openai_api", side_effect=fake_call_openai_api_fail):
+                success, failed = process_artists_concurrent(
+                    artists=artists,
+                    client=object(),
+                    prompt_id="pid",
+                    version=None,
+                    max_workers=2,
+                    output_path=output_path,
+                    db_pool=pool,
+                    test_mode=False,
+                )
 
-        self.assertEqual(success, 0)
-        self.assertEqual(failed, len(artists))
-        self.assertEqual(len(responses), len(artists))
-        self.assertEqual(pool.get_count, len(artists))
-        self.assertEqual(pool.put_count, len(artists))
-        self.assertEqual(len(pool.released), len(artists))
+            self.assertEqual(success, 0)
+            self.assertEqual(failed, len(artists))
+            self.assertEqual(pool.get_count, len(artists))
+            self.assertEqual(pool.put_count, len(artists))
+            self.assertEqual(len(pool.released), len(artists))
+        finally:
+            # Clean up temporary file
+            if os.path.exists(output_path):
+                os.unlink(output_path)
 
 
 if __name__ == "__main__":

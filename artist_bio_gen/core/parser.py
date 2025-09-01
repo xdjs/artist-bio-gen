@@ -7,6 +7,7 @@ for the artist bio generator application.
 
 import csv
 import logging
+from typing import Optional, Set
 
 from ..models import ArtistData, ParseResult
 from ..database import validate_uuid
@@ -14,7 +15,7 @@ from ..database import validate_uuid
 logger = logging.getLogger(__name__)
 
 
-def parse_input_file(file_path: str) -> ParseResult:
+def parse_input_file(file_path: str, skip_processed_ids: Optional[Set[str]] = None) -> ParseResult:
     """
     Parse a CSV input file containing artist data.
 
@@ -27,6 +28,7 @@ def parse_input_file(file_path: str) -> ParseResult:
 
     Args:
         file_path: Path to the input file
+        skip_processed_ids: Set of artist IDs to skip (for resume functionality)
 
     Returns:
         ParseResult containing parsed artists and statistics
@@ -38,6 +40,7 @@ def parse_input_file(file_path: str) -> ParseResult:
     artists = []
     skipped_lines = 0
     error_lines = 0
+    resumed_skipped = 0
     header_skipped = False
 
     try:
@@ -90,6 +93,12 @@ def parse_input_file(file_path: str) -> ParseResult:
                         error_lines += 1
                         continue
 
+                    # Skip already-processed artists if resume mode is enabled
+                    if skip_processed_ids and artist_id in skip_processed_ids:
+                        logger.debug(f"Line {line_num}: Skipping already-processed artist: {artist_name} ({artist_id})")
+                        resumed_skipped += 1
+                        continue
+
                     # Create artist data object
                     artist = ArtistData(
                         artist_id=artist_id,
@@ -113,6 +122,8 @@ def parse_input_file(file_path: str) -> ParseResult:
     logger.info(f"Parsed {len(artists)} artists from {file_path}")
     if skipped_lines > 0:
         logger.info(f"Skipped {skipped_lines} comment/blank/header lines")
+    if resumed_skipped > 0:
+        logger.info(f"Skipped {resumed_skipped} already-processed artists (resume mode)")
     if error_lines > 0:
         logger.warning(f"Encountered {error_lines} error lines")
 

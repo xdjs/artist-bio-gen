@@ -8,7 +8,7 @@ This module provides shared utility functions organized by concern:
 """
 
 # Logging utilities
-from .logging import setup_logging
+from .logging import setup_logging, log_transaction_success, log_transaction_failure
 
 # General helper utilities
 from .helpers import create_progress_bar
@@ -19,6 +19,8 @@ from .text import strip_trailing_citations
 
 __all__ = [
     "setup_logging",
+    "log_transaction_success", 
+    "log_transaction_failure",
     "create_progress_bar",
     "_is_output_path_writable",
     "strip_trailing_citations",

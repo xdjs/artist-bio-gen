@@ -20,11 +20,11 @@ from ..constants import (
 
 from ..core import (
     parse_input_file,
-    write_jsonl_output,
     process_artists_concurrent,
     log_processing_start,
     log_processing_summary,
     calculate_processing_stats,
+    get_processed_artist_ids,
 )
 
 from ..api import (
@@ -97,8 +97,21 @@ def main():
         sys.exit(EXIT_CONFIG_ERROR)
 
     try:
-        # Parse the input file
-        parse_result = parse_input_file(args.input_file)
+        # Handle resume functionality - read already processed artists
+        processed_ids = set()
+        if args.resume:
+            try:
+                processed_ids = get_processed_artist_ids(args.output)
+                if processed_ids:
+                    logger.info(f"Resume mode: Found {len(processed_ids)} already-processed artists in {args.output}")
+                else:
+                    logger.info(f"Resume mode: No existing output file or processed artists found in {args.output}")
+            except Exception as e:
+                logger.error(f"Failed to read processed artists for resume: {e}")
+                sys.exit(EXIT_INPUT_ERROR)
+
+        # Parse the input file (with optional resume filtering)
+        parse_result = parse_input_file(args.input_file, skip_processed_ids=processed_ids if args.resume else None)
 
         if not parse_result.artists:
             logger.error("No valid artists found in input file")
@@ -160,23 +173,19 @@ def main():
 
         # Process artists concurrently
         try:
-            successful_calls, failed_calls, all_responses = process_artists_concurrent(
+            successful_calls, failed_calls = process_artists_concurrent(
                 artists=parse_result.artists,
                 client=client,
                 prompt_id=env.OPENAI_PROMPT_ID,
                 version=args.version,
                 max_workers=args.max_workers,
+                output_path=args.output,
                 db_pool=db_pool,
                 test_mode=args.test_mode,
+                resume_mode=args.resume,
             )
 
-            # Write all responses to JSONL file
-            write_jsonl_output(
-                responses=all_responses,
-                output_path=args.output,
-                prompt_id=env.OPENAI_PROMPT_ID,
-                version=args.version,
-            )
+            logger.info(f"Streaming output completed: {args.output}")
 
         except KeyboardInterrupt:
             # Graceful interruption handling
@@ -191,7 +200,9 @@ def main():
                 start_time=start_time,
                 end_time=end_time,
             )
+            
             logger.warning("Processing interrupted by user (Ctrl+C). Partial summary:")
+            logger.info(f"Partial results saved to streaming output: {args.output}")
             log_processing_summary(stats)
             sys.exit(EXIT_INTERRUPTED)
 
