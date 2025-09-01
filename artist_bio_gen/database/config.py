@@ -138,21 +138,3 @@ def create_database_config(
     )
 
 
-def get_database_url_from_env(test_mode: bool = False) -> Optional[str]:
-    """
-    Get database URL from environment variables.
-
-    Args:
-        test_mode: Unused parameter (kept for backward compatibility)
-
-    Returns:
-        Database URL string or None if not found
-    """
-    # Always use standard DATABASE_URL regardless of test mode
-    url = os.getenv("DATABASE_URL")
-    if url:
-        logger.debug("Using DATABASE_URL from environment")
-        return url
-
-    logger.error("No database URL found. Set DATABASE_URL environment variable.")
-    return None

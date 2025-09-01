@@ -398,6 +398,10 @@ class TestMainFunctionWithParser(unittest.TestCase):
             "--prompt-id",
             "test_prompt",
             "--dry-run",
+            "--openai-api-key",
+            "test_api_key",
+            "--db-url",
+            "postgresql://test:test@localhost:5432/test",
         ]
 
         # Capture stdout
@@ -435,6 +439,10 @@ class TestMainFunctionWithParser(unittest.TestCase):
             non_existent_file,
             "--prompt-id",
             "test_prompt",
+            "--openai-api-key",
+            "test_api_key",
+            "--db-url",
+            "postgresql://test:test@localhost:5432/test",
         ]
 
         with self.assertRaises(SystemExit) as cm:

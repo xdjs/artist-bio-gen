@@ -81,15 +81,17 @@ pip install "mypy>=1.0.0"                  # For type checking
 3. **Set up environment variables:**
    ```bash
    export OPENAI_API_KEY="your-api-key-here"
-   export OPENAI_PROMPT_ID="your-prompt-id-here"  # Optional
    export DATABASE_URL="postgresql://username:password@localhost:5432/artist_bios"
+   export OPENAI_PROMPT_ID="your-prompt-id-here"  # Optional
+   export OPENAI_ORG_ID="your-org-id-here"        # Optional
    ```
 
    Or create a `.env.local` file:
    ```
    OPENAI_API_KEY=your-api-key-here
-   OPENAI_PROMPT_ID=your-prompt-id-here
    DATABASE_URL=postgresql://username:password@localhost:5432/artist_bios
+   OPENAI_PROMPT_ID=your-prompt-id-here
+   OPENAI_ORG_ID=your-org-id-here
    ```
 
 4. **Set up PostgreSQL database:**
@@ -136,6 +138,29 @@ python3 run_artists.py --input-file artists.csv --prompt-id your-prompt-id
 | `--test-mode` | Use test_artists table | `False` | ❌ |
 | `--dry-run` | Parse inputs without API calls | `False` | ❌ |
 | `--verbose` | Enable debug logging | `False` | ❌ |
+| `--openai-api-key` | OpenAI API key | `OPENAI_API_KEY` env var | ❌ |
+| `--openai-prompt-id` | OpenAI prompt ID | `OPENAI_PROMPT_ID` env var | ❌ |
+| `--openai-org-id` | OpenAI organization ID | `OPENAI_ORG_ID` env var | ❌ |
+| `--db-url` | Database URL | `DATABASE_URL` env var | ❌ |
+
+### Configuration Precedence
+
+The application loads configuration from multiple sources with the following precedence (highest to lowest):
+
+1. **CLI arguments** (highest priority)
+2. **OS environment variables**
+3. **`.env.local` file** (if `python-dotenv` is installed)
+4. **Defaults** (lowest priority)
+
+**Example:**
+```bash
+# Environment variable
+export OPENAI_API_KEY="env-key"
+
+# CLI override (takes precedence)
+python3 run_artists.py --input-file artists.csv --openai-api-key "cli-key"
+# Uses "cli-key" instead of "env-key"
+```
 
 ### Examples
 
@@ -152,6 +177,22 @@ python3 run_artists.py --input-file artists.csv --prompt-id prompt_123 --output 
 **Dry run to test your input file:**
 ```bash
 python3 run_artists.py --input-file artists.csv --prompt-id prompt_123 --dry-run
+```
+
+**Using CLI configuration overrides:**
+```bash
+python3 run_artists.py --input-file artists.csv \
+    --openai-api-key "sk-proj-abc123..." \
+    --db-url "postgresql://user:pass@host:5432/db" \
+    --openai-prompt-id "prompt_456"
+```
+
+**Production run with organization ID:**
+```bash
+python3 run_artists.py --input-file artists.csv \
+    --openai-org-id "org-123" \
+    --enable-db \
+    --max-workers 6
 ```
 
 **Verbose logging for debugging:**

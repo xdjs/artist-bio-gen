@@ -15,7 +15,6 @@ from .connection import (
 from .config import (
     validate_database_url,
     create_database_config,
-    get_database_url_from_env,
 )
 
 from .operations import (
@@ -37,7 +36,6 @@ __all__ = [
     # Configuration
     "validate_database_url",
     "create_database_config",
-    "get_database_url_from_env",
     # Operations
     "update_artist_bio",
     "get_table_name",

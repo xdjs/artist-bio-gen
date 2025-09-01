@@ -14,11 +14,10 @@ from .logging import setup_logging
 from .helpers import create_progress_bar
 
 # Validation utilities
-from .validation import _is_output_path_writable, apply_environment_defaults
+from .validation import _is_output_path_writable
 
 __all__ = [
     "setup_logging",
     "create_progress_bar",
     "_is_output_path_writable",
-    "apply_environment_defaults",
 ]
