@@ -14,7 +14,7 @@ from typing import List, Optional, Tuple
 from ..models import ArtistData, ApiResponse, ProcessingStats
 from ..api import call_openai_api
 from ..utils import create_progress_bar
-from ..database import get_db_connection
+from ..database import get_db_connection, release_db_connection
 
 try:
     from openai import OpenAI
@@ -229,6 +229,7 @@ def process_artists_concurrent(
         # Submit all tasks with unique worker IDs
         future_to_artist = {}
         future_to_worker = {}
+        future_to_connection = {}
         for i, artist in enumerate(artists):
             worker_id = f"W{i % max_workers + 1:02d}"  # W01, W02, W03, etc.
             
@@ -253,6 +254,7 @@ def process_artists_concurrent(
             )
             future_to_artist[future] = artist
             future_to_worker[future] = worker_id
+            future_to_connection[future] = db_connection
 
         # Process completed tasks as they finish
         for future in as_completed(future_to_artist):
@@ -307,6 +309,13 @@ def process_artists_concurrent(
                 logger.error(
                     f"[{worker_id}] Thread error processing artist '{artist.name}': {error_msg}"
                 )
+            finally:
+                # Always return DB connection to the pool if it was acquired
+                if db_pool is not None:
+                    try:
+                        release_db_connection(db_pool, future_to_connection.get(future))
+                    except Exception:
+                        pass
 
             # Log periodic progress updates during concurrent processing
             current_time = time.time()
