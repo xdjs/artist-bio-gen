@@ -86,6 +86,24 @@ def get_db_connection(pool: "ConnectionPool") -> Optional["psycopg3.Connection"]
         return None
 
 
+def release_db_connection(pool: "ConnectionPool", connection: Optional["psycopg3.Connection"]) -> None:
+    """
+    Return a database connection to the pool.
+
+    Args:
+        pool: Database connection pool
+        connection: Connection to return (ignored if None)
+    """
+    if pool is None or connection is None:
+        return
+
+    try:
+        pool.putconn(connection)
+        logger.debug("Returned database connection to pool")
+    except Exception as e:
+        logger.warning(f"Failed to return connection to pool: {str(e)}")
+
+
 def close_db_connection_pool(pool: "ConnectionPool") -> None:
     """
     Close the database connection pool.
