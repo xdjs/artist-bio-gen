@@ -119,7 +119,8 @@ class TestEnvironmentIntegration(unittest.TestCase):
         self.assertIsNone(env.OPENAI_ORG_ID)
 
     @patch.dict(os.environ, {}, clear=True)
-    def test_missing_required_config_error_integration(self):
+    @patch('artist_bio_gen.config.env._load_from_dotenv_file')
+    def test_missing_required_config_error_integration(self, mock_dotenv):
         """Test that missing required configuration produces proper error in main()."""
         test_content = "550e8400-e29b-41d4-a716-446655440001,Error Test,Error Data"
         test_file = self.create_test_file(test_content)

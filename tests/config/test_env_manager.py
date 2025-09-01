@@ -153,7 +153,8 @@ class TestEnvLoading(unittest.TestCase):
         env_module._ENV = None
 
     @patch.dict(os.environ, {}, clear=True)
-    def test_load_missing_required_fields(self):
+    @patch('artist_bio_gen.config.env._load_from_dotenv_file')
+    def test_load_missing_required_fields(self, mock_dotenv):
         """Test that loading without required fields raises ConfigError."""
         with self.assertRaises(ConfigError) as cm:
             Env.load()
@@ -166,7 +167,8 @@ class TestEnvLoading(unittest.TestCase):
         "OPENAI_API_KEY": "env_key",
         "DATABASE_URL": "postgresql://env:env@localhost:5432/env"
     }, clear=True)
-    def test_load_from_environment(self):
+    @patch('artist_bio_gen.config.env._load_from_dotenv_file')
+    def test_load_from_environment(self, mock_dotenv):
         """Test loading from OS environment variables."""
         env = Env.load()
         
@@ -209,7 +211,8 @@ class TestEnvLoading(unittest.TestCase):
         self.assertIsNone(env.OPENAI_ORG_ID)
 
     @patch.dict(os.environ, {}, clear=True)
-    def test_cli_overrides_provide_required(self):
+    @patch('artist_bio_gen.config.env._load_from_dotenv_file')
+    def test_cli_overrides_provide_required(self, mock_dotenv):
         """Test that CLI overrides can provide required fields."""
         cli_overrides = {
             "OPENAI_API_KEY": "cli_key",
