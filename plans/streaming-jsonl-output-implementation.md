@@ -3,7 +3,7 @@
 ## Progress Status
 - **Branch**: `feat/streaming-jsonl-output`
 - **Last Updated**: September 1, 2025
-- **Overall Progress**: 5/10 tasks completed (50%)
+- **Overall Progress**: 6/10 tasks completed (60%)
 
 ### Completed Tasks ✅
 - ✅ Task 1.1: Refactor JSONL Writing Function (Commit: d3c8828)
@@ -11,12 +11,12 @@
 - ✅ Task 1.3: Update CLI Main Flow (Commit: 4b1c992)
 - ✅ Task 1.4: Refactor to Streaming-Only Design
 - ✅ Task 1.5: Simplify CLI and Remove Dual Mode
+- ✅ Task 2.1: Implement Transaction-Level Logging
 
 ### In Progress 🔄
-- 🔄 *Ready for Task 2.1: Implement Transaction-Level Logging*
+- 🔄 *Ready for Task 2.2: Add Progress Resume Capability*
 
 ### Pending ⏳
-- ⏳ Task 2.1: Implement Transaction-Level Logging  
 - ⏳ Task 2.2: Add Progress Resume Capability
 - ⏳ Task 3.1: Update Test Suite
 - ⏳ Task 3.2: Integration Testing with Large Dataset
@@ -157,22 +157,30 @@ Implement streaming JSONL output where each response is written immediately afte
 
 ### Phase 2: Enhanced Logging and Recovery (Priority: Medium)
 
-#### Task 2.1: Implement Transaction-Level Logging
-**File**: `artist_bio_gen/utils/logging.py` (new/enhanced)
-**Estimated Time**: 2 hours  
+#### Task 2.1: Implement Transaction-Level Logging ✅ COMPLETED
+**File**: `artist_bio_gen/utils/logging.py` (enhanced)
+**Estimated Time**: 2 hours *(Actual: ~2 hours)*
 **Dependencies**: Task 1.3
+**Status**: ✅ **COMPLETED**
 
-**Changes Required**:
-- Add structured logging for each successful DB commit
-- Include artist ID, timestamp, processing time, and status
-- Log exact database transaction details
-- Create recovery-friendly log format
+**Changes Implemented**:
+- ✅ Added `log_transaction_success()` function for successful database commits
+- ✅ Added `log_transaction_failure()` function for failed operations
+- ✅ Integrated structured logging into API operations (operations.py)
+- ✅ Created machine-readable JSON log format with all required fields
+- ✅ Added comprehensive test suite (test_transaction_logging.py)
+- ✅ Exported new functions through utils module __init__.py
+- ✅ All 135 tests pass including new transaction logging tests
 
-**Acceptance Criteria**:
-- Each DB commit generates a structured log entry
-- Logs contain sufficient detail for crash recovery
-- Log format is machine-readable for automation
-- Integration with existing logging infrastructure
+**Log Format**:
+- Success: `TRANSACTION: {"event_type": "database_transaction", "timestamp": 1693843200, "artist_id": "...", "success": true}`
+- Failure: `TRANSACTION_FAILURE: {"event_type": "transaction_failure", "timestamp": 1693843200, "error_message": "...", "success": false}`
+
+**Acceptance Criteria Met**:
+- ✅ Each DB commit generates a structured log entry
+- ✅ Logs contain sufficient detail for crash recovery
+- ✅ Log format is machine-readable JSON for automation
+- ✅ Seamlessly integrated with existing logging infrastructure
 
 #### Task 2.2: Add Progress Resume Capability
 **File**: `artist_bio_gen/core/parser.py` and `artist_bio_gen/cli/main.py`
