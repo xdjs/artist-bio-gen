@@ -20,7 +20,6 @@ from ..constants import (
 
 from ..core import (
     parse_input_file,
-    write_jsonl_output,
     process_artists_concurrent,
     log_processing_start,
     log_processing_summary,
@@ -160,28 +159,18 @@ def main():
 
         # Process artists concurrently
         try:
-            successful_calls, failed_calls, all_responses = process_artists_concurrent(
+            successful_calls, failed_calls = process_artists_concurrent(
                 artists=parse_result.artists,
                 client=client,
                 prompt_id=env.OPENAI_PROMPT_ID,
                 version=args.version,
                 max_workers=args.max_workers,
+                output_path=args.output,
                 db_pool=db_pool,
                 test_mode=args.test_mode,
-                output_path=args.output,
-                stream_output=args.stream_output,
             )
 
-            # Write all responses to JSONL file (only if not streaming)
-            if not args.stream_output:
-                write_jsonl_output(
-                    responses=all_responses,
-                    output_path=args.output,
-                    prompt_id=env.OPENAI_PROMPT_ID,
-                    version=args.version,
-                )
-            else:
-                logger.info(f"Streaming output completed: {args.output}")
+            logger.info(f"Streaming output completed: {args.output}")
 
         except KeyboardInterrupt:
             # Graceful interruption handling
@@ -198,8 +187,7 @@ def main():
             )
             
             logger.warning("Processing interrupted by user (Ctrl+C). Partial summary:")
-            if args.stream_output:
-                logger.info(f"Partial results saved to streaming output: {args.output}")
+            logger.info(f"Partial results saved to streaming output: {args.output}")
             log_processing_summary(stats)
             sys.exit(EXIT_INTERRUPTED)
 

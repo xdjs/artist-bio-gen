@@ -196,13 +196,16 @@ def process_artists_concurrent(
     prompt_id: str,
     version: Optional[str],
     max_workers: int,
+    output_path: str,
     db_pool: Optional[object] = None,
     test_mode: bool = False,
-    output_path: Optional[str] = None,
-    stream_output: bool = False,
-) -> Tuple[int, int, List[ApiResponse]]:
+) -> Tuple[int, int]:
     """
-    Process artists concurrently using ThreadPoolExecutor with enhanced error isolation.
+    Process artists concurrently with streaming JSONL output.
+    
+    Responses are written to the JSONL file immediately after successful
+    API calls and database commits, ensuring memory-efficient processing
+    and fault-tolerant operation.
 
     Args:
         artists: List of artists to process
@@ -210,28 +213,23 @@ def process_artists_concurrent(
         prompt_id: OpenAI prompt ID
         version: Optional prompt version
         max_workers: Maximum number of concurrent workers
+        output_path: Path to JSONL output file for streaming writes
         db_pool: Database connection pool for bio updates (optional)
         test_mode: If True, use test_artists table
-        output_path: Path to JSONL output file for streaming writes (optional)
-        stream_output: If True, write responses to JSONL immediately after DB commit
 
     Returns:
-        Tuple of (successful_calls, failed_calls, all_responses)
-        Note: If stream_output=True, all_responses will be empty to save memory
+        Tuple of (successful_calls, failed_calls)
     """
     successful_calls = 0
     failed_calls = 0
-    all_responses = []
 
-    # Initialize streaming output file if streaming is enabled
-    if stream_output and output_path:
-        try:
-            initialize_jsonl_output(output_path, overwrite_existing=True)
-            logger.info(f"Initialized streaming JSONL output: {output_path}")
-        except Exception as e:
-            logger.error(f"Failed to initialize streaming output file: {e}")
-            # Continue without streaming rather than failing completely
-            stream_output = False
+    # Initialize streaming JSONL output file
+    try:
+        initialize_jsonl_output(output_path, overwrite_existing=True)
+        logger.info(f"Initialized streaming JSONL output: {output_path}")
+    except Exception as e:
+        logger.error(f"Failed to initialize streaming output file: {e}")
+        raise
 
     logger.info(f"Starting concurrent processing with {max_workers} workers")
 
@@ -278,13 +276,17 @@ def process_artists_concurrent(
             worker_id = future_to_worker[future]
             try:
                 api_response, duration = future.result()
-                
-                # Only accumulate responses in memory if not streaming (to save memory)
-                if not stream_output:
-                    all_responses.append(api_response)
 
                 if api_response.error:
                     failed_calls += 1
+                    
+                    # Stream error response to JSONL file
+                    try:
+                        append_jsonl_response(api_response, output_path, prompt_id, version)
+                        logger.debug(f"Streamed error response for '{artist.name}' to {output_path}")
+                    except Exception as e:
+                        logger.error(f"Failed to stream error response for '{artist.name}': {e}")
+                    
                     log_progress_update(
                         successful_calls + failed_calls,
                         len(artists),
@@ -296,13 +298,12 @@ def process_artists_concurrent(
                 else:
                     successful_calls += 1
                     
-                    # Stream to JSONL file immediately if streaming is enabled
-                    if stream_output and output_path:
-                        try:
-                            append_jsonl_response(api_response, output_path, prompt_id, version)
-                            logger.debug(f"Streamed response for '{artist.name}' to {output_path}")
-                        except Exception as e:
-                            logger.error(f"Failed to stream response for '{artist.name}': {e}")
+                    # Stream successful response to JSONL file immediately  
+                    try:
+                        append_jsonl_response(api_response, output_path, prompt_id, version)
+                        logger.debug(f"Streamed response for '{artist.name}' to {output_path}")
+                    except Exception as e:
+                        logger.error(f"Failed to stream response for '{artist.name}': {e}")
                     
                     log_progress_update(
                         successful_calls + failed_calls,
@@ -331,17 +332,12 @@ def process_artists_concurrent(
                     error=error_msg,
                 )
                 
-                # Only accumulate responses in memory if not streaming
-                if not stream_output:
-                    all_responses.append(error_response)
-                
-                # Stream error responses too if streaming is enabled
-                if stream_output and output_path:
-                    try:
-                        append_jsonl_response(error_response, output_path, prompt_id, version)
-                        logger.debug(f"Streamed error response for '{artist.name}' to {output_path}")
-                    except Exception as stream_e:
-                        logger.error(f"Failed to stream error response for '{artist.name}': {stream_e}")
+                # Stream exception error response to JSONL file
+                try:
+                    append_jsonl_response(error_response, output_path, prompt_id, version)
+                    logger.debug(f"Streamed exception error response for '{artist.name}' to {output_path}")
+                except Exception as stream_e:
+                    logger.error(f"Failed to stream exception error response for '{artist.name}': {stream_e}")
                 
                 log_progress_update(
                     successful_calls + failed_calls, len(artists), artist.name, False, 0.0, worker_id
@@ -386,4 +382,4 @@ def process_artists_concurrent(
     logger.info(
         f"Concurrent processing completed: {successful_calls} successful, {failed_calls} failed"
     )
-    return successful_calls, failed_calls, all_responses
+    return successful_calls, failed_calls

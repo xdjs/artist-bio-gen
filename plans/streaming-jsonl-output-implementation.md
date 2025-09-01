@@ -2,13 +2,15 @@
 
 ## Progress Status
 - **Branch**: `feat/streaming-jsonl-output`
-- **Last Updated**: August 31, 2025
-- **Overall Progress**: 3/8 tasks completed (37.5%)
+- **Last Updated**: September 1, 2025
+- **Overall Progress**: 5/10 tasks completed (50%)
 
 ### Completed Tasks ✅
 - ✅ Task 1.1: Refactor JSONL Writing Function (Commit: d3c8828)
 - ✅ Task 1.2: Modify Concurrent Processor Architecture (Commit: d64c9b3)
-- ✅ Task 1.3: Update CLI Main Flow
+- ✅ Task 1.3: Update CLI Main Flow (Commit: 4b1c992)
+- ✅ Task 1.4: Refactor to Streaming-Only Design
+- ✅ Task 1.5: Simplify CLI and Remove Dual Mode
 
 ### In Progress 🔄
 - 🔄 *Ready for Task 2.1: Implement Transaction-Level Logging*
@@ -106,6 +108,52 @@ Implement streaming JSONL output where each response is written immediately afte
 - ✅ Full backward compatibility (all existing CLI tests pass)
 - ✅ New flag tested and working correctly
 - ✅ Clear user feedback about streaming status
+
+#### Task 1.4: Refactor to Streaming-Only Design ✅ COMPLETED  
+**File**: `artist_bio_gen/core/processor.py`
+**Estimated Time**: 1 hour *(Actual: ~1 hour)*
+**Dependencies**: Task 1.3
+**Status**: ✅ **COMPLETED**
+
+**Changes Implemented**:
+- ✅ Removed `stream_output` parameter from `process_artists_concurrent()` 
+- ✅ Made `output_path` parameter required instead of optional
+- ✅ Always initialize and write to JSONL file (removed conditional logic)
+- ✅ Removed memory accumulation logic entirely (removed `all_responses` from return)
+- ✅ Simplified return type from `Tuple[int, int, List[ApiResponse]]` to `Tuple[int, int]`
+- ✅ Updated function signature and docstring
+- ✅ Removed dual-mode complexity completely
+- ✅ Updated all test files to use new function signature
+- ✅ All tests pass (131/131)
+
+**Acceptance Criteria Met**:
+- ✅ Single code path with streaming-only behavior
+- ✅ Memory usage always constant regardless of dataset size
+- ✅ No conditional logic for streaming vs non-streaming
+- ✅ Simplified function signature and implementation
+- ✅ All existing functionality maintained
+
+#### Task 1.5: Simplify CLI and Remove Dual Mode ✅ COMPLETED
+**File**: `artist_bio_gen/cli/main.py` and `artist_bio_gen/cli/parser.py`
+**Estimated Time**: 0.5 hours *(Actual: ~0.5 hours)*
+**Dependencies**: Task 1.4
+**Status**: ✅ **COMPLETED**
+
+**Changes Implemented**:
+- ✅ Removed `--stream-output` CLI flag entirely from parser
+- ✅ Removed conditional `write_jsonl_output()` call from main flow
+- ✅ Simplified processor call to use new streaming-only signature
+- ✅ Updated interruption handling to remove dual-mode logic
+- ✅ Removed unused `write_jsonl_output` import
+- ✅ Updated all help text to reflect streaming-only design
+- ✅ All tests pass (131/131) with simplified behavior
+
+**Acceptance Criteria Met**:
+- ✅ Cleaner CLI interface without unnecessary flags
+- ✅ Single behavior: always streaming
+- ✅ Simplified main flow logic
+- ✅ Updated help text reflects streaming-only design
+- ✅ All tests pass with single behavior
 
 ### Phase 2: Enhanced Logging and Recovery (Priority: Medium)
 
