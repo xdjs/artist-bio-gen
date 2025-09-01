@@ -24,6 +24,7 @@ from ..core import (
     log_processing_start,
     log_processing_summary,
     calculate_processing_stats,
+    get_processed_artist_ids,
 )
 
 from ..api import (
@@ -96,8 +97,21 @@ def main():
         sys.exit(EXIT_CONFIG_ERROR)
 
     try:
-        # Parse the input file
-        parse_result = parse_input_file(args.input_file)
+        # Handle resume functionality - read already processed artists
+        processed_ids = set()
+        if args.resume:
+            try:
+                processed_ids = get_processed_artist_ids(args.output)
+                if processed_ids:
+                    logger.info(f"Resume mode: Found {len(processed_ids)} already-processed artists in {args.output}")
+                else:
+                    logger.info(f"Resume mode: No existing output file or processed artists found in {args.output}")
+            except Exception as e:
+                logger.error(f"Failed to read processed artists for resume: {e}")
+                sys.exit(EXIT_INPUT_ERROR)
+
+        # Parse the input file (with optional resume filtering)
+        parse_result = parse_input_file(args.input_file, skip_processed_ids=processed_ids if args.resume else None)
 
         if not parse_result.artists:
             logger.error("No valid artists found in input file")
@@ -168,6 +182,7 @@ def main():
                 output_path=args.output,
                 db_pool=db_pool,
                 test_mode=args.test_mode,
+                resume_mode=args.resume,
             )
 
             logger.info(f"Streaming output completed: {args.output}")

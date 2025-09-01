@@ -9,7 +9,7 @@ import json
 import logging
 import os
 import threading
-from typing import List, Optional
+from typing import List, Optional, Set
 
 from ..models import ApiResponse
 
@@ -183,4 +183,62 @@ def initialize_jsonl_output(
         
     except Exception as e:
         logger.error(f"Failed to initialize JSONL output file {output_path}: {e}")
+        raise
+
+
+def get_processed_artist_ids(output_path: str) -> Set[str]:
+    """
+    Read processed artist IDs from an existing JSONL output file.
+    
+    This function reads a JSONL file and extracts the artist_id from each
+    successfully processed entry. It's used for resume functionality to
+    determine which artists have already been processed.
+    
+    Args:
+        output_path: Path to the existing JSONL output file
+        
+    Returns:
+        Set of artist IDs that have been successfully processed
+        
+    Raises:
+        FileNotFoundError: If the output file doesn't exist
+        IOError: If file reading fails
+        json.JSONDecodeError: If JSONL format is invalid
+    """
+    processed_ids = set()
+    
+    if not os.path.exists(output_path):
+        logger.info(f"Output file does not exist: {output_path}")
+        return processed_ids
+    
+    try:
+        with open(output_path, "r", encoding="utf-8") as f:
+            for line_num, line in enumerate(f, 1):
+                line = line.strip()
+                if not line:
+                    continue
+                    
+                try:
+                    record = json.loads(line)
+                    
+                    # Extract artist_id from the record
+                    if "artist_id" in record:
+                        # Only count successful entries (no error field or error is null/empty)
+                        error = record.get("error")
+                        if not error or error == "":
+                            processed_ids.add(record["artist_id"])
+                        else:
+                            logger.debug(f"Skipping failed entry for artist {record.get('artist_id', 'unknown')} on line {line_num}")
+                    else:
+                        logger.warning(f"Line {line_num}: Missing artist_id field in JSONL record")
+                        
+                except json.JSONDecodeError as e:
+                    logger.warning(f"Line {line_num}: Invalid JSON in JSONL file: {e}")
+                    continue
+                    
+        logger.info(f"Found {len(processed_ids)} successfully processed artists in {output_path}")
+        return processed_ids
+        
+    except Exception as e:
+        logger.error(f"Failed to read processed artist IDs from {output_path}: {e}")
         raise

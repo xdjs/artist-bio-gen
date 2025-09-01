@@ -199,6 +199,7 @@ def process_artists_concurrent(
     output_path: str,
     db_pool: Optional[object] = None,
     test_mode: bool = False,
+    resume_mode: bool = False,
 ) -> Tuple[int, int]:
     """
     Process artists concurrently with streaming JSONL output.
@@ -216,6 +217,7 @@ def process_artists_concurrent(
         output_path: Path to JSONL output file for streaming writes
         db_pool: Database connection pool for bio updates (optional)
         test_mode: If True, use test_artists table
+        resume_mode: If True, append to existing file instead of overwriting
 
     Returns:
         Tuple of (successful_calls, failed_calls)
@@ -225,8 +227,13 @@ def process_artists_concurrent(
 
     # Initialize streaming JSONL output file
     try:
-        initialize_jsonl_output(output_path, overwrite_existing=True)
-        logger.info(f"Initialized streaming JSONL output: {output_path}")
+        if resume_mode:
+            # In resume mode, don't overwrite existing files
+            initialize_jsonl_output(output_path, overwrite_existing=False)
+            logger.info(f"Initialized streaming JSONL output for resume: {output_path}")
+        else:
+            initialize_jsonl_output(output_path, overwrite_existing=True)
+            logger.info(f"Initialized streaming JSONL output: {output_path}")
     except Exception as e:
         logger.error(f"Failed to initialize streaming output file: {e}")
         raise
