@@ -16,7 +16,6 @@ from artist_bio_gen.database import (
     create_database_config,
     get_table_name,
     classify_database_error,
-    get_database_url_from_env,
 )
 
 # Import constants
@@ -212,31 +211,7 @@ class TestDatabaseErrorClassification(unittest.TestCase):
         self.assertEqual(classify_database_error(error), "permanent")
 
 
-class TestEnvironmentVariableHandling(unittest.TestCase):
-    """Test cases for environment variable handling."""
-
-    @patch.dict(os.environ, {}, clear=True)
-    def test_get_database_url_from_env_no_vars(self):
-        """Test when no environment variables are set."""
-        url = get_database_url_from_env()
-        self.assertIsNone(url)
-
-        url = get_database_url_from_env(test_mode=True)
-        self.assertIsNone(url)
-
-    @patch.dict(
-        os.environ,
-        {"DATABASE_URL": "postgresql://user:pass@localhost/prod"},
-        clear=True,
-    )
-    def test_get_database_url_from_env_production(self):
-        """Test getting DATABASE_URL in production mode."""
-        url = get_database_url_from_env(test_mode=False)
-        self.assertEqual(url, "postgresql://user:pass@localhost/prod")
-
-        # Test mode should also fall back to DATABASE_URL if TEST_DATABASE_URL not set
-        url = get_database_url_from_env(test_mode=True)
-        self.assertEqual(url, "postgresql://user:pass@localhost/prod")
+# TestEnvironmentVariableHandling class removed - functionality now handled by Env.load() in centralized config
 
 
 if __name__ == "__main__":

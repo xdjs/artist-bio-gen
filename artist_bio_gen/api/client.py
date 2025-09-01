@@ -6,10 +6,10 @@ for the artist bio generator application.
 """
 
 import logging
-import os
 import sys
 
 from ..constants import EXIT_CONFIG_ERROR
+from ..config import Env
 
 try:
     from openai import OpenAI
@@ -27,11 +27,14 @@ def create_openai_client() -> "OpenAI":
         )
         sys.exit(EXIT_CONFIG_ERROR)
 
-    api_key = os.getenv("OPENAI_API_KEY")
-    if not api_key:
-        logger.error("OPENAI_API_KEY environment variable not set")
-        sys.exit(EXIT_CONFIG_ERROR)
+    # Get configuration from centralized environment manager
+    env = Env.current()
+    
+    # Create client with API key and optional organization ID
+    client_kwargs = {"api_key": env.OPENAI_API_KEY}
+    if env.OPENAI_ORG_ID:
+        client_kwargs["organization"] = env.OPENAI_ORG_ID
 
-    client = OpenAI(api_key=api_key)
+    client = OpenAI(**client_kwargs)
     logger.info("OpenAI client initialized successfully")
     return client

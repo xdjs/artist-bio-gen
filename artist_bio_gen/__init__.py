@@ -74,7 +74,6 @@ from .cli import (
 from .utils import (
     setup_logging,
     create_progress_bar,
-    apply_environment_defaults,
 )
 
 # Public API exports
@@ -118,5 +117,4 @@ __all__ = [
     # Utilities
     "setup_logging",
     "create_progress_bar",
-    "apply_environment_defaults",
 ]

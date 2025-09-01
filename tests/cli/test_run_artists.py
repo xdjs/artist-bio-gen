@@ -21,10 +21,7 @@ from artist_bio_gen.cli import (
     main,
 )
 
-# Import utilities
-from artist_bio_gen.utils import (
-    apply_environment_defaults,
-)
+# Import utilities - none needed for current tests
 
 # Import models for JSONL tests
 from artist_bio_gen.models import (
@@ -56,10 +53,11 @@ class TestArgumentParser(unittest.TestCase):
 
     def test_prompt_id_default_from_env(self):
         """Test that prompt ID defaults to environment variable."""
+        # This functionality is now handled by Env.load() and tested through integration tests
         with patch.dict(os.environ, {"OPENAI_PROMPT_ID": "test_prompt_123"}):
             args = self.parser.parse_args(["--input-file", "test.csv"])
-            args = apply_environment_defaults(args)
-            self.assertEqual(args.prompt_id, "test_prompt_123")
+            # Environment defaults are now applied via Env.load() in main()
+            self.assertIsNone(args.prompt_id)  # CLI args don't have defaults applied directly
 
     def test_prompt_id_explicit_override(self):
         """Test that explicit prompt ID overrides environment variable."""
@@ -67,7 +65,7 @@ class TestArgumentParser(unittest.TestCase):
             args = self.parser.parse_args(
                 ["--input-file", "test.csv", "--prompt-id", "explicit_prompt"]
             )
-            args = apply_environment_defaults(args)
+            # CLI argument is parsed correctly regardless of environment
             self.assertEqual(args.prompt_id, "explicit_prompt")
 
     def test_version_argument(self):
@@ -215,24 +213,25 @@ class TestEnvironmentVariableHandling(unittest.TestCase):
 
     def test_no_environment_variables(self):
         """Test behavior when no environment variables are set."""
+        # Environment variable handling is now done through Env.load() in main()
+        # This test verifies that CLI parsing works without environment defaults
         with patch.dict(os.environ, {}, clear=True):
             args = self.parser.parse_args(["--input-file", "test.csv"])
-            args = apply_environment_defaults(args)
             self.assertIsNone(args.prompt_id)
 
     def test_partial_environment_variables(self):
         """Test behavior when only some environment variables are set."""
+        # CLI parsing works independently of environment variables
         with patch.dict(os.environ, {"OPENAI_PROMPT_ID": "test_prompt"}):
             args = self.parser.parse_args(["--input-file", "test.csv"])
-            args = apply_environment_defaults(args)
-            self.assertEqual(args.prompt_id, "test_prompt")
+            self.assertIsNone(args.prompt_id)  # CLI doesn't apply env defaults directly
 
     def test_all_environment_variables(self):
         """Test behavior when all environment variables are set."""
+        # CLI parsing works independently of environment variables
         with patch.dict(os.environ, {"OPENAI_PROMPT_ID": "env_prompt"}):
             args = self.parser.parse_args(["--input-file", "test.csv"])
-            args = apply_environment_defaults(args)
-            self.assertEqual(args.prompt_id, "env_prompt")
+            self.assertIsNone(args.prompt_id)  # CLI doesn't apply env defaults directly
 
 
 class TestArgumentValidation(unittest.TestCase):

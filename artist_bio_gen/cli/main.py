@@ -33,7 +33,6 @@ from ..api import (
 
 from ..database import (
     create_db_connection_pool,
-    get_database_url_from_env,
     create_database_config,
     close_db_connection_pool,
 )
