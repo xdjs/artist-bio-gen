@@ -75,7 +75,7 @@ Implement a central Environment manager class to replace scattered `os.getenv()`
 
 ### Phase 2: CLI Integration (Priority: High)
 
-#### Task 2.1: Update CLI Argument Parser
+#### Task 2.1: Update CLI Argument Parser ✅
 - **File**: `artist_bio_gen/cli/main.py`
 - **Changes**:
   - Add CLI flags: `--db-url`, `--openai-api-key`, `--openai-prompt-id`, `--openai-org-id`
@@ -83,8 +83,9 @@ Implement a central Environment manager class to replace scattered `os.getenv()`
   - Build override dictionary from provided CLI arguments only
 - **Dependencies**: Task 1.1
 - **Estimate**: 2-3 hours
+- **Status**: ✅ COMPLETED - All new CLI flags added with proper override mapping
 
-#### Task 2.2: Replace Environment Defaults Logic
+#### Task 2.2: Replace Environment Defaults Logic ✅
 - **Files**: 
   - `artist_bio_gen/cli/main.py:63` - Replace `apply_environment_defaults()` call
   - Remove validation logic that's now handled by `Env.load()`
@@ -94,18 +95,20 @@ Implement a central Environment manager class to replace scattered `os.getenv()`
   - Update error messages to match new format
 - **Dependencies**: Tasks 1.3, 2.1
 - **Estimate**: 2 hours
+- **Status**: ✅ COMPLETED - CLI main updated to use Env.load() with override mapping
 
-#### Task 2.3: Update Main Entry Point Bootstrap
+#### Task 2.3: Update Main Entry Point Bootstrap ✅
 - **File**: `artist_bio_gen/main.py`
 - **Changes**:
   - Remove direct `load_dotenv()` call (handled by `Env.load()`)
   - Add early `Env.load()` call if needed for backward compatibility
 - **Dependencies**: Task 1.3
 - **Estimate**: 1 hour
+- **Status**: ✅ COMPLETED - Removed direct .env.local loading from bootstrap
 
-### Phase 3: Replace Direct Environment Access (Priority: High)
+### Phase 3: Replace Direct Environment Access (Priority: High) ✅
 
-#### Task 3.1: Update API Client Module
+#### Task 3.1: Update API Client Module ✅
 - **File**: `artist_bio_gen/api/client.py:30-33`
 - **Changes**:
   - Replace `os.getenv("OPENAI_API_KEY")` with `Env.current().OPENAI_API_KEY`
@@ -113,8 +116,9 @@ Implement a central Environment manager class to replace scattered `os.getenv()`
   - Remove validation logic (handled by `Env.load()`)
 - **Dependencies**: Task 1.4
 - **Estimate**: 1 hour
+- **Status**: ✅ COMPLETED - API client now uses centralized config with org ID support
 
-#### Task 3.2: Update Database Configuration
+#### Task 3.2: Update Database Configuration ✅
 - **File**: `artist_bio_gen/database/config.py:152-158`
 - **Changes**:
   - Replace `os.getenv("DATABASE_URL")` with `Env.current().DATABASE_URL`
@@ -122,8 +126,9 @@ Implement a central Environment manager class to replace scattered `os.getenv()`
   - Update calling code to use `Env.current().DATABASE_URL` directly
 - **Dependencies**: Task 1.4
 - **Estimate**: 1-2 hours
+- **Status**: ✅ COMPLETED - Removed obsolete function and updated CLI to use Env.current()
 
-#### Task 3.3: Remove Legacy Environment Utilities
+#### Task 3.3: Remove Legacy Environment Utilities ✅
 - **File**: `artist_bio_gen/utils/validation.py:13-19`
 - **Changes**:
   - Remove `apply_environment_defaults()` function
@@ -131,6 +136,7 @@ Implement a central Environment manager class to replace scattered `os.getenv()`
   - Update `__init__.py` exports
 - **Dependencies**: Task 2.2
 - **Estimate**: 1 hour
+- **Status**: ✅ COMPLETED - All legacy environment utilities removed and imports updated
 
 ### Phase 4: Testing (Priority: Medium)
 
