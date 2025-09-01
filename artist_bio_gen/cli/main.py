@@ -44,11 +44,41 @@ from .parser import (
 
 from ..utils import (
     setup_logging,
-    apply_environment_defaults,
     _is_output_path_writable,
 )
 
+from ..config import Env
+
 logger = logging.getLogger(__name__)
+
+
+def _build_cli_overrides(args) -> dict:
+    """
+    Build CLI override dictionary from parsed arguments.
+    Only includes values that were explicitly provided on the command line.
+    """
+    overrides = {}
+    
+    # Map CLI argument names to environment variable names
+    cli_to_env_mapping = {
+        "openai_api_key": "OPENAI_API_KEY",
+        "db_url": "DATABASE_URL",
+        "openai_prompt_id": "OPENAI_PROMPT_ID",
+        "openai_org_id": "OPENAI_ORG_ID",
+    }
+    
+    # Only include values that were explicitly provided
+    for cli_name, env_name in cli_to_env_mapping.items():
+        # Use getattr to safely get the attribute with underscores converted to dashes
+        cli_attr = cli_name.replace("_", "_")  # Keep underscores for attribute access
+        if hasattr(args, cli_attr) and getattr(args, cli_attr) is not None:
+            overrides[env_name] = getattr(args, cli_attr)
+    
+    # Handle special case for prompt-id which could come from --prompt-id or --openai-prompt-id
+    if hasattr(args, "prompt_id") and args.prompt_id is not None:
+        overrides["OPENAI_PROMPT_ID"] = args.prompt_id
+    
+    return overrides
 
 
 def main():
@@ -59,8 +89,13 @@ def main():
     # Setup logging with verbose flag
     setup_logging(verbose=args.verbose)
 
-    # Handle environment variable defaults
-    args = apply_environment_defaults(args)
+    # Load environment configuration with CLI overrides
+    try:
+        cli_overrides = _build_cli_overrides(args)
+        env = Env.load(cli_overrides)
+    except Exception as e:
+        logger.error(f"Configuration error: {e}")
+        sys.exit(EXIT_CONFIG_ERROR)
 
     try:
         # Parse the input file
@@ -86,8 +121,9 @@ def main():
             logger.info("=" * 70)
             return
 
-        # Validate required configuration
-        if not args.prompt_id:
+        # Validate required configuration - now handled by Env.load()
+        # OPENAI_PROMPT_ID is optional, so we need to check it here for backward compatibility
+        if not env.OPENAI_PROMPT_ID:
             logger.error(
                 "Prompt ID is required. Set OPENAI_PROMPT_ID environment variable or use --prompt-id"
             )
@@ -107,12 +143,8 @@ def main():
         db_pool = None
         if args.enable_db:
             try:
-                db_url = get_database_url_from_env(test_mode=args.test_mode)
-                if not db_url:
-                    logger.error("Database URL not found. Set DATABASE_URL environment variable.")
-                    sys.exit(EXIT_CONFIG_ERROR)
-                
-                db_config = create_database_config(url=db_url, test_mode=args.test_mode)
+                # Use database URL from environment configuration
+                db_config = create_database_config(url=env.DATABASE_URL, test_mode=args.test_mode)
                 db_pool = create_db_connection_pool(db_config)
                 logger.info(f"Database connection initialized {'(test mode)' if args.test_mode else ''}")
             except Exception as e:
@@ -123,7 +155,7 @@ def main():
         start_time = log_processing_start(
             total_artists=len(parse_result.artists),
             input_file=args.input_file,
-            prompt_id=args.prompt_id,
+            prompt_id=env.OPENAI_PROMPT_ID,
             max_workers=args.max_workers,
         )
 
@@ -132,7 +164,7 @@ def main():
             successful_calls, failed_calls, all_responses = process_artists_concurrent(
                 artists=parse_result.artists,
                 client=client,
-                prompt_id=args.prompt_id,
+                prompt_id=env.OPENAI_PROMPT_ID,
                 version=args.version,
                 max_workers=args.max_workers,
                 db_pool=db_pool,
@@ -143,7 +175,7 @@ def main():
             write_jsonl_output(
                 responses=all_responses,
                 output_path=args.output,
-                prompt_id=args.prompt_id,
+                prompt_id=env.OPENAI_PROMPT_ID,
                 version=args.version,
             )
 

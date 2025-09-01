@@ -72,4 +72,29 @@ Examples:
         help="Use test_artists table instead of artists table"
     )
 
+    # Environment variable overrides
+    parser.add_argument(
+        "--openai-api-key",
+        default=None,
+        help="OpenAI API key (default: OPENAI_API_KEY env var)"
+    )
+
+    parser.add_argument(
+        "--openai-prompt-id",
+        default=None,
+        help="OpenAI prompt ID (default: OPENAI_PROMPT_ID env var)"
+    )
+
+    parser.add_argument(
+        "--openai-org-id",
+        default=None,
+        help="OpenAI organization ID (default: OPENAI_ORG_ID env var)"
+    )
+
+    parser.add_argument(
+        "--db-url",
+        default=None,
+        help="Database URL (default: DATABASE_URL env var)"
+    )
+
     return parser
