@@ -29,6 +29,7 @@ from ..core import (
 
 from ..api import (
     create_openai_client,
+    RateLimiter,
 )
 
 from ..database import (
@@ -57,26 +58,29 @@ def _build_cli_overrides(args) -> dict:
     Only includes values that were explicitly provided on the command line.
     """
     overrides = {}
-    
+
     # Map CLI argument names to environment variable names
     cli_to_env_mapping = {
         "openai_api_key": "OPENAI_API_KEY",
         "db_url": "DATABASE_URL",
         "openai_prompt_id": "OPENAI_PROMPT_ID",
         "openai_org_id": "OPENAI_ORG_ID",
+        "openai_rpm": "OPENAI_RPM",
+        "openai_tpm": "OPENAI_TPM",
+        "openai_tpd": "OPENAI_TPD",
     }
-    
+
     # Only include values that were explicitly provided
     for cli_name, env_name in cli_to_env_mapping.items():
         # Use getattr to safely get the attribute with underscores converted to dashes
         cli_attr = cli_name.replace("_", "_")  # Keep underscores for attribute access
         if hasattr(args, cli_attr) and getattr(args, cli_attr) is not None:
             overrides[env_name] = getattr(args, cli_attr)
-    
+
     # Handle special case for prompt-id which could come from --prompt-id or --openai-prompt-id
     if hasattr(args, "prompt_id") and args.prompt_id is not None:
         overrides["OPENAI_PROMPT_ID"] = args.prompt_id
-    
+
     return overrides
 
 
@@ -103,15 +107,21 @@ def main():
             try:
                 processed_ids = get_processed_artist_ids(args.output)
                 if processed_ids:
-                    logger.info(f"Resume mode: Found {len(processed_ids)} already-processed artists in {args.output}")
+                    logger.info(
+                        f"Resume mode: Found {len(processed_ids)} already-processed artists in {args.output}"
+                    )
                 else:
-                    logger.info(f"Resume mode: No existing output file or processed artists found in {args.output}")
+                    logger.info(
+                        f"Resume mode: No existing output file or processed artists found in {args.output}"
+                    )
             except Exception as e:
                 logger.error(f"Failed to read processed artists for resume: {e}")
                 sys.exit(EXIT_INPUT_ERROR)
 
         # Parse the input file (with optional resume filtering)
-        parse_result = parse_input_file(args.input_file, skip_processed_ids=processed_ids if args.resume else None)
+        parse_result = parse_input_file(
+            args.input_file, skip_processed_ids=processed_ids if args.resume else None
+        )
 
         if not parse_result.artists:
             logger.error("No valid artists found in input file")
@@ -151,14 +161,25 @@ def main():
         # Initialize OpenAI client
         client = create_openai_client()
 
+        # Initialize rate limiter with configuration values
+        rate_limiter = RateLimiter(
+            rpm=env.OPENAI_RPM,
+            tpm=env.OPENAI_TPM,
+            tpd=env.OPENAI_TPD,
+        )
+
         # Initialize database connection if enabled
         db_pool = None
         if args.enable_db:
             try:
                 # Use database URL from environment configuration
-                db_config = create_database_config(url=env.DATABASE_URL, test_mode=args.test_mode)
+                db_config = create_database_config(
+                    url=env.DATABASE_URL, test_mode=args.test_mode
+                )
                 db_pool = create_db_connection_pool(db_config)
-                logger.info(f"Database connection initialized {'(test mode)' if args.test_mode else ''}")
+                logger.info(
+                    f"Database connection initialized {'(test mode)' if args.test_mode else ''}"
+                )
             except Exception as e:
                 logger.error(f"Failed to initialize database connection: {e}")
                 sys.exit(EXIT_CONFIG_ERROR)
@@ -183,6 +204,7 @@ def main():
                 db_pool=db_pool,
                 test_mode=args.test_mode,
                 resume_mode=args.resume,
+                rate_limiter=rate_limiter,
             )
 
             logger.info(f"Streaming output completed: {args.output}")
@@ -200,7 +222,7 @@ def main():
                 start_time=start_time,
                 end_time=end_time,
             )
-            
+
             logger.warning("Processing interrupted by user (Ctrl+C). Partial summary:")
             logger.info(f"Partial results saved to streaming output: {args.output}")
             log_processing_summary(stats)
@@ -237,7 +259,7 @@ def main():
         sys.exit(EXIT_UNEXPECTED_ERROR)
     finally:
         # Clean up database connection pool
-        if 'db_pool' in locals() and db_pool is not None:
+        if "db_pool" in locals() and db_pool is not None:
             try:
                 close_db_connection_pool(db_pool)
             except Exception as e:

@@ -44,7 +44,17 @@ class TestProcessorDbPool(unittest.TestCase):
         artists = _make_artists(4)
         pool = FakePool()
 
-        def fake_call_openai_api(client, artist, prompt_id, version, worker_id, db_connection, skip_existing, test_mode):
+        def fake_call_openai_api(
+            client,
+            artist,
+            prompt_id,
+            version,
+            worker_id,
+            db_connection,
+            skip_existing,
+            test_mode,
+            rate_limiter=None,
+        ):
             # Return a minimal successful response and duration
             return (
                 ApiResponse(
@@ -61,11 +71,14 @@ class TestProcessorDbPool(unittest.TestCase):
             )
 
         # Create temporary JSONL output file
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.jsonl', delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".jsonl", delete=False) as f:
             output_path = f.name
-        
+
         try:
-            with patch("artist_bio_gen.core.processor.call_openai_api", side_effect=fake_call_openai_api):
+            with patch(
+                "artist_bio_gen.core.processor.call_openai_api",
+                side_effect=fake_call_openai_api,
+            ):
                 success, failed = process_artists_concurrent(
                     artists=artists,
                     client=object(),
@@ -95,11 +108,14 @@ class TestProcessorDbPool(unittest.TestCase):
             raise RuntimeError("boom")
 
         # Create temporary JSONL output file
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.jsonl', delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".jsonl", delete=False) as f:
             output_path = f.name
-        
+
         try:
-            with patch("artist_bio_gen.core.processor.call_openai_api", side_effect=fake_call_openai_api_fail):
+            with patch(
+                "artist_bio_gen.core.processor.call_openai_api",
+                side_effect=fake_call_openai_api_fail,
+            ):
                 success, failed = process_artists_concurrent(
                     artists=artists,
                     client=object(),
@@ -124,4 +140,3 @@ class TestProcessorDbPool(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

@@ -15,9 +15,10 @@ from .operations import (
 )
 
 from .utils import (
+    RateLimiter,
     should_retry_error,
     calculate_retry_delay,
-    retry_with_exponential_backoff,
+    call_with_retry,
 )
 
 __all__ = [
@@ -26,7 +27,8 @@ __all__ = [
     # Operations
     "call_openai_api",
     # Utilities
+    "RateLimiter",
     "should_retry_error",
     "calculate_retry_delay",
-    "retry_with_exponential_backoff",
+    "call_with_retry",
 ]

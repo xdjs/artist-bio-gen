@@ -84,6 +84,9 @@ pip install "mypy>=1.0.0"                  # For type checking
    export DATABASE_URL="postgresql://username:password@localhost:5432/artist_bios"
    export OPENAI_PROMPT_ID="your-prompt-id-here"  # Optional
    export OPENAI_ORG_ID="your-org-id-here"        # Optional
+   export OPENAI_RPM="500"                       # Optional
+   export OPENAI_TPM="200000"                    # Optional
+   export OPENAI_TPD="2000000"                   # Optional
    ```
 
    Or create a `.env.local` file:
@@ -92,6 +95,9 @@ pip install "mypy>=1.0.0"                  # For type checking
    DATABASE_URL=postgresql://username:password@localhost:5432/artist_bios
    OPENAI_PROMPT_ID=your-prompt-id-here
    OPENAI_ORG_ID=your-org-id-here
+   OPENAI_RPM=500
+   OPENAI_TPM=200000
+   OPENAI_TPD=2000000
    ```
 
 4. **Set up PostgreSQL database:**
@@ -141,6 +147,9 @@ python3 run_artists.py --input-file artists.csv --prompt-id your-prompt-id
 | `--openai-api-key` | OpenAI API key | `OPENAI_API_KEY` env var | ❌ |
 | `--openai-prompt-id` | OpenAI prompt ID | `OPENAI_PROMPT_ID` env var | ❌ |
 | `--openai-org-id` | OpenAI organization ID | `OPENAI_ORG_ID` env var | ❌ |
+| `--openai-rpm` | Requests per minute limit | `OPENAI_RPM` env var | ❌ |
+| `--openai-tpm` | Tokens per minute limit | `OPENAI_TPM` env var | ❌ |
+| `--openai-tpd` | Tokens per day limit | `OPENAI_TPD` env var | ❌ |
 | `--db-url` | Database URL | `DATABASE_URL` env var | ❌ |
 
 ### Configuration Precedence

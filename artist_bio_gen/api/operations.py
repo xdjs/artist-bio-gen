@@ -13,7 +13,7 @@ from ..models import ArtistData, ApiResponse
 from ..utils import strip_trailing_citations
 from ..utils.logging import log_transaction_success, log_transaction_failure
 from ..database import update_artist_bio
-from .utils import retry_with_exponential_backoff
+from .utils import RateLimiter, call_with_retry
 
 try:
     from openai import OpenAI
@@ -25,7 +25,6 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 
-@retry_with_exponential_backoff(max_retries=5, base_delay=0.5, max_delay=4.0)
 def call_openai_api(
     client: "OpenAI",
     artist: ArtistData,
@@ -35,6 +34,7 @@ def call_openai_api(
     db_connection: Optional["psycopg3.Connection"] = None,
     skip_existing: bool = False,
     test_mode: bool = False,
+    rate_limiter: Optional[RateLimiter] = None,
 ) -> Tuple[ApiResponse, float]:
     """
     Make an API call to OpenAI Responses API for a single artist and optionally update database.
@@ -73,8 +73,17 @@ def call_openai_api(
 
         logger.debug(f"[{worker_id}] Calling API for artist: {artist.name}")
 
-        # Make the API call
-        response = client.responses.create(prompt=prompt_config)
+        # Make the API call with centralized rate limiting and retries
+        def _do_call():
+            return client.responses.create(prompt=prompt_config)
+
+        if rate_limiter is None:
+            rate_limiter = RateLimiter()
+        response = call_with_retry(
+            _do_call,
+            rate_limiter=rate_limiter,
+            worker_id=worker_id,
+        )
 
         # Extract and clean response text
         raw_text = response.output_text
@@ -126,7 +135,7 @@ def call_openai_api(
                 logger.error(
                     f"[{worker_id}] 💥 Database update error for {artist.name}: {str(db_error)}"
                 )
-        
+
         # Log structured transaction information for database operations
         if db_connection is not None:
             if db_status in ["updated", "skipped"]:
@@ -139,7 +148,7 @@ def call_openai_api(
                     db_status=db_status,
                     response_id=response_id,
                     timestamp=end_time,
-                    logger=logger
+                    logger=logger,
                 )
             elif db_status == "error":
                 # Log failed database transaction
@@ -150,7 +159,7 @@ def call_openai_api(
                     processing_duration=duration,
                     error_message=f"Database operation failed: {db_status}",
                     timestamp=end_time,
-                    logger=logger
+                    logger=logger,
                 )
 
         api_response = ApiResponse(
@@ -195,7 +204,7 @@ def call_openai_api(
             processing_duration=duration,
             error_message=error_msg,
             timestamp=end_time,
-            logger=logger
+            logger=logger,
         )
 
         logger.error(

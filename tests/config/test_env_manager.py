@@ -20,12 +20,14 @@ class TestEnvManager(unittest.TestCase):
         """Set up test fixtures."""
         # Clear any existing singleton
         import artist_bio_gen.config.env as env_module
+
         env_module._ENV = None
 
     def tearDown(self):
         """Clean up after tests."""
         # Clear singleton after each test
         import artist_bio_gen.config.env as env_module
+
         env_module._ENV = None
 
     def test_from_mapping_success(self):
@@ -34,11 +36,11 @@ class TestEnvManager(unittest.TestCase):
             "OPENAI_API_KEY": "test_api_key",
             "DATABASE_URL": "postgresql://test:test@localhost:5432/test",
             "OPENAI_PROMPT_ID": "test_prompt",
-            "OPENAI_ORG_ID": "test_org"
+            "OPENAI_ORG_ID": "test_org",
         }
-        
+
         env = Env.from_mapping(mapping)
-        
+
         self.assertEqual(env.OPENAI_API_KEY, "test_api_key")
         self.assertEqual(env.DATABASE_URL, "postgresql://test:test@localhost:5432/test")
         self.assertEqual(env.OPENAI_PROMPT_ID, "test_prompt")
@@ -69,11 +71,11 @@ class TestEnvManager(unittest.TestCase):
         """Test that optional fields can be None."""
         mapping = {
             "OPENAI_API_KEY": "test_key",
-            "DATABASE_URL": "postgresql://test:test@localhost:5432/test"
+            "DATABASE_URL": "postgresql://test:test@localhost:5432/test",
         }
-        
+
         env = Env.from_mapping(mapping)
-        
+
         self.assertEqual(env.OPENAI_API_KEY, "test_key")
         self.assertEqual(env.DATABASE_URL, "postgresql://test:test@localhost:5432/test")
         self.assertIsNone(env.OPENAI_PROMPT_ID)
@@ -84,17 +86,20 @@ class TestEnvManager(unittest.TestCase):
         mapping = {
             "OPENAI_API_KEY": "test_key",
             "DATABASE_URL": "postgresql://test:test@localhost:5432/test",
-            "OPENAI_PROMPT_ID": "test_prompt"
+            "OPENAI_PROMPT_ID": "test_prompt",
         }
-        
+
         env = Env.from_mapping(mapping)
         result = env.to_dict()
-        
+
         expected = {
             "OPENAI_API_KEY": "test_key",
             "DATABASE_URL": "postgresql://test:test@localhost:5432/test",
             "OPENAI_PROMPT_ID": "test_prompt",
-            "OPENAI_ORG_ID": None
+            "OPENAI_ORG_ID": None,
+            "OPENAI_RPM": 500,
+            "OPENAI_TPM": 200000,
+            "OPENAI_TPD": 2000000,
         }
         self.assertEqual(result, expected)
 
@@ -104,17 +109,20 @@ class TestEnvManager(unittest.TestCase):
             "OPENAI_API_KEY": "secret_key",
             "DATABASE_URL": "postgresql://user:pass@localhost:5432/db",
             "OPENAI_PROMPT_ID": "prompt_123",
-            "OPENAI_ORG_ID": "org_456"
+            "OPENAI_ORG_ID": "org_456",
         }
-        
+
         env = Env.from_mapping(mapping)
         result = env.mask()
-        
+
         expected = {
             "OPENAI_API_KEY": "***",
             "DATABASE_URL": "***",
             "OPENAI_PROMPT_ID": "prompt_123",  # Not sensitive
-            "OPENAI_ORG_ID": "org_456"        # Not sensitive
+            "OPENAI_ORG_ID": "org_456",  # Not sensitive
+            "OPENAI_RPM": 500,
+            "OPENAI_TPM": 200000,
+            "OPENAI_TPD": 2000000,
         }
         self.assertEqual(result, expected)
 
@@ -122,17 +130,20 @@ class TestEnvManager(unittest.TestCase):
         """Test masking when some values are None."""
         mapping = {
             "OPENAI_API_KEY": "secret_key",
-            "DATABASE_URL": "postgresql://user:pass@localhost:5432/db"
+            "DATABASE_URL": "postgresql://user:pass@localhost:5432/db",
         }
-        
+
         env = Env.from_mapping(mapping)
         result = env.mask()
-        
+
         expected = {
             "OPENAI_API_KEY": "***",
             "DATABASE_URL": "***",
             "OPENAI_PROMPT_ID": None,
-            "OPENAI_ORG_ID": None
+            "OPENAI_ORG_ID": None,
+            "OPENAI_RPM": 500,
+            "OPENAI_TPM": 200000,
+            "OPENAI_TPD": 2000000,
         }
         self.assertEqual(result, expected)
 
@@ -144,83 +155,96 @@ class TestEnvLoading(unittest.TestCase):
         """Set up test fixtures."""
         # Clear any existing singleton
         import artist_bio_gen.config.env as env_module
+
         env_module._ENV = None
 
     def tearDown(self):
         """Clean up after tests."""
         # Clear singleton after each test
         import artist_bio_gen.config.env as env_module
+
         env_module._ENV = None
 
     @patch.dict(os.environ, {}, clear=True)
-    @patch('artist_bio_gen.config.env._load_from_dotenv_file')
+    @patch("artist_bio_gen.config.env._load_from_dotenv_file")
     def test_load_missing_required_fields(self, mock_dotenv):
         """Test that loading without required fields raises ConfigError."""
         with self.assertRaises(ConfigError) as cm:
             Env.load()
-        
+
         error_msg = str(cm.exception)
         self.assertIn("OPENAI_API_KEY", error_msg)
         self.assertIn("DATABASE_URL", error_msg)
 
-    @patch.dict(os.environ, {
-        "OPENAI_API_KEY": "env_key",
-        "DATABASE_URL": "postgresql://env:env@localhost:5432/env"
-    }, clear=True)
-    @patch('artist_bio_gen.config.env._load_from_dotenv_file')
+    @patch.dict(
+        os.environ,
+        {
+            "OPENAI_API_KEY": "env_key",
+            "DATABASE_URL": "postgresql://env:env@localhost:5432/env",
+        },
+        clear=True,
+    )
+    @patch("artist_bio_gen.config.env._load_from_dotenv_file")
     def test_load_from_environment(self, mock_dotenv):
         """Test loading from OS environment variables."""
         env = Env.load()
-        
+
         self.assertEqual(env.OPENAI_API_KEY, "env_key")
         self.assertEqual(env.DATABASE_URL, "postgresql://env:env@localhost:5432/env")
         self.assertIsNone(env.OPENAI_PROMPT_ID)
         self.assertIsNone(env.OPENAI_ORG_ID)
 
-    @patch.dict(os.environ, {
-        "OPENAI_API_KEY": "env_key",
-        "DATABASE_URL": "postgresql://env:env@localhost:5432/env",
-        "OPENAI_PROMPT_ID": "env_prompt",
-        "OPENAI_ORG_ID": "env_org"
-    }, clear=True)
+    @patch.dict(
+        os.environ,
+        {
+            "OPENAI_API_KEY": "env_key",
+            "DATABASE_URL": "postgresql://env:env@localhost:5432/env",
+            "OPENAI_PROMPT_ID": "env_prompt",
+            "OPENAI_ORG_ID": "env_org",
+        },
+        clear=True,
+    )
     def test_load_all_from_environment(self):
         """Test loading all fields from OS environment."""
         env = Env.load()
-        
+
         self.assertEqual(env.OPENAI_API_KEY, "env_key")
         self.assertEqual(env.DATABASE_URL, "postgresql://env:env@localhost:5432/env")
         self.assertEqual(env.OPENAI_PROMPT_ID, "env_prompt")
         self.assertEqual(env.OPENAI_ORG_ID, "env_org")
 
-    @patch.dict(os.environ, {
-        "OPENAI_API_KEY": "env_key",
-        "DATABASE_URL": "postgresql://env:env@localhost:5432/env"
-    }, clear=True)
+    @patch.dict(
+        os.environ,
+        {
+            "OPENAI_API_KEY": "env_key",
+            "DATABASE_URL": "postgresql://env:env@localhost:5432/env",
+        },
+        clear=True,
+    )
     def test_cli_overrides_environment(self):
         """Test that CLI overrides take precedence over environment."""
-        cli_overrides = {
-            "OPENAI_API_KEY": "cli_key",
-            "OPENAI_PROMPT_ID": "cli_prompt"
-        }
-        
+        cli_overrides = {"OPENAI_API_KEY": "cli_key", "OPENAI_PROMPT_ID": "cli_prompt"}
+
         env = Env.load(cli_overrides)
-        
+
         self.assertEqual(env.OPENAI_API_KEY, "cli_key")  # CLI override
-        self.assertEqual(env.DATABASE_URL, "postgresql://env:env@localhost:5432/env")  # From env
+        self.assertEqual(
+            env.DATABASE_URL, "postgresql://env:env@localhost:5432/env"
+        )  # From env
         self.assertEqual(env.OPENAI_PROMPT_ID, "cli_prompt")  # CLI override
         self.assertIsNone(env.OPENAI_ORG_ID)
 
     @patch.dict(os.environ, {}, clear=True)
-    @patch('artist_bio_gen.config.env._load_from_dotenv_file')
+    @patch("artist_bio_gen.config.env._load_from_dotenv_file")
     def test_cli_overrides_provide_required(self, mock_dotenv):
         """Test that CLI overrides can provide required fields."""
         cli_overrides = {
             "OPENAI_API_KEY": "cli_key",
-            "DATABASE_URL": "postgresql://cli:cli@localhost:5432/cli"
+            "DATABASE_URL": "postgresql://cli:cli@localhost:5432/cli",
         }
-        
+
         env = Env.load(cli_overrides)
-        
+
         self.assertEqual(env.OPENAI_API_KEY, "cli_key")
         self.assertEqual(env.DATABASE_URL, "postgresql://cli:cli@localhost:5432/cli")
         self.assertIsNone(env.OPENAI_PROMPT_ID)
@@ -231,11 +255,11 @@ class TestEnvLoading(unittest.TestCase):
         cli_overrides = {
             "OPENAI_API_KEY": "  cli_key  ",
             "DATABASE_URL": "  postgresql://cli:cli@localhost:5432/cli  ",
-            "OPENAI_PROMPT_ID": "  cli_prompt  "
+            "OPENAI_PROMPT_ID": "  cli_prompt  ",
         }
-        
+
         env = Env.load(cli_overrides)
-        
+
         self.assertEqual(env.OPENAI_API_KEY, "cli_key")
         self.assertEqual(env.DATABASE_URL, "postgresql://cli:cli@localhost:5432/cli")
         self.assertEqual(env.OPENAI_PROMPT_ID, "cli_prompt")
@@ -246,11 +270,11 @@ class TestEnvLoading(unittest.TestCase):
             "OPENAI_API_KEY": "valid_key",
             "DATABASE_URL": "postgresql://test:test@localhost:5432/test",
             "OPENAI_PROMPT_ID": "",  # Empty string
-            "OPENAI_ORG_ID": "   "   # Whitespace only
+            "OPENAI_ORG_ID": "   ",  # Whitespace only
         }
-        
+
         env = Env.load(cli_overrides)
-        
+
         self.assertEqual(env.OPENAI_API_KEY, "valid_key")
         self.assertEqual(env.DATABASE_URL, "postgresql://test:test@localhost:5432/test")
         self.assertIsNone(env.OPENAI_PROMPT_ID)
@@ -264,54 +288,64 @@ class TestSingletonBehavior(unittest.TestCase):
         """Set up test fixtures."""
         # Clear any existing singleton
         import artist_bio_gen.config.env as env_module
+
         env_module._ENV = None
 
     def tearDown(self):
         """Clean up after tests."""
         # Clear singleton after each test
         import artist_bio_gen.config.env as env_module
+
         env_module._ENV = None
 
     def test_current_before_load_raises_error(self):
         """Test that current() raises error before load() is called."""
         with self.assertRaises(ConfigError) as cm:
             Env.current()
-        
+
         self.assertIn("not initialized", str(cm.exception))
         self.assertIn("Env.load()", str(cm.exception))
 
-    @patch.dict(os.environ, {
-        "OPENAI_API_KEY": "test_key",
-        "DATABASE_URL": "postgresql://test:test@localhost:5432/test"
-    }, clear=True)
+    @patch.dict(
+        os.environ,
+        {
+            "OPENAI_API_KEY": "test_key",
+            "DATABASE_URL": "postgresql://test:test@localhost:5432/test",
+        },
+        clear=True,
+    )
     def test_load_sets_singleton(self):
         """Test that load() sets the singleton instance."""
         env = Env.load()
-        
+
         # Should be able to get the same instance via current()
         current_env = Env.current()
-        
+
         self.assertIs(env, current_env)
         self.assertEqual(current_env.OPENAI_API_KEY, "test_key")
 
-    @patch.dict(os.environ, {
-        "OPENAI_API_KEY": "first_key",
-        "DATABASE_URL": "postgresql://first:first@localhost:5432/first"
-    }, clear=True)
+    @patch.dict(
+        os.environ,
+        {
+            "OPENAI_API_KEY": "first_key",
+            "DATABASE_URL": "postgresql://first:first@localhost:5432/first",
+        },
+        clear=True,
+    )
     def test_subsequent_load_updates_singleton(self):
         """Test that subsequent load() calls update the singleton."""
         # First load
         env1 = Env.load()
         self.assertEqual(env1.OPENAI_API_KEY, "first_key")
-        
+
         # Second load with different values
         cli_overrides = {"OPENAI_API_KEY": "second_key"}
         env2 = Env.load(cli_overrides)
-        
+
         # Should be different instance with updated values
         self.assertIsNot(env1, env2)
         self.assertEqual(env2.OPENAI_API_KEY, "second_key")
-        
+
         # current() should return the new instance
         current_env = Env.current()
         self.assertIs(env2, current_env)
@@ -325,73 +359,76 @@ class TestDotenvFileLoading(unittest.TestCase):
         """Set up test fixtures."""
         # Clear any existing singleton
         import artist_bio_gen.config.env as env_module
+
         env_module._ENV = None
 
     def tearDown(self):
         """Clean up after tests."""
         # Clear singleton after each test
         import artist_bio_gen.config.env as env_module
+
         env_module._ENV = None
 
-    @patch('os.path.exists')
-    @patch('builtins.__import__')
+    @patch("os.path.exists")
+    @patch("builtins.__import__")
     def test_dotenv_file_loading_success(self, mock_import, mock_exists):
         """Test successful .env.local file loading."""
         mock_exists.return_value = True
-        
+
         # Mock the dotenv module and load_dotenv function
         mock_dotenv_module = unittest.mock.MagicMock()
         mock_load_dotenv = unittest.mock.MagicMock()
         mock_dotenv_module.load_dotenv = mock_load_dotenv
-        
+
         def side_effect(name, *args, **kwargs):
-            if name == 'dotenv':
+            if name == "dotenv":
                 return mock_dotenv_module
             return unittest.mock.DEFAULT
-        
+
         mock_import.side_effect = side_effect
         values = {}
-        
+
         _load_from_dotenv_file(values)
-        
+
         mock_exists.assert_called_once_with(".env.local")
         mock_load_dotenv.assert_called_once_with(".env.local", override=False)
 
-    @patch('os.path.exists')
-    @patch('builtins.__import__')
+    @patch("os.path.exists")
+    @patch("builtins.__import__")
     def test_dotenv_file_not_exists(self, mock_import, mock_exists):
         """Test behavior when .env.local file doesn't exist."""
         mock_exists.return_value = False
-        
+
         # Mock the dotenv module
         mock_dotenv_module = unittest.mock.MagicMock()
         mock_load_dotenv = unittest.mock.MagicMock()
         mock_dotenv_module.load_dotenv = mock_load_dotenv
-        
+
         def side_effect(name, *args, **kwargs):
-            if name == 'dotenv':
+            if name == "dotenv":
                 return mock_dotenv_module
             return unittest.mock.DEFAULT
-        
+
         mock_import.side_effect = side_effect
         values = {}
-        
+
         _load_from_dotenv_file(values)
-        
+
         mock_exists.assert_called_once_with(".env.local")
         mock_load_dotenv.assert_not_called()
 
-    @patch('builtins.__import__')
+    @patch("builtins.__import__")
     def test_dotenv_import_error_handling(self, mock_import):
         """Test graceful handling when python-dotenv is not available."""
+
         def side_effect(name, *args, **kwargs):
-            if name == 'dotenv':
+            if name == "dotenv":
                 raise ImportError("No module named 'dotenv'")
             return unittest.mock.DEFAULT
-        
+
         mock_import.side_effect = side_effect
         values = {}
-        
+
         # Should not raise exception
         _load_from_dotenv_file(values)
 

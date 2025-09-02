@@ -12,7 +12,7 @@ from datetime import datetime, timedelta
 from typing import List, Optional, Tuple
 
 from ..models import ArtistData, ApiResponse, ProcessingStats
-from ..api import call_openai_api
+from ..api import call_openai_api, RateLimiter
 from ..utils import create_progress_bar
 from ..database import get_db_connection, release_db_connection
 from .output import append_jsonl_response, initialize_jsonl_output
@@ -200,10 +200,11 @@ def process_artists_concurrent(
     db_pool: Optional[object] = None,
     test_mode: bool = False,
     resume_mode: bool = False,
+    rate_limiter: Optional[RateLimiter] = None,
 ) -> Tuple[int, int]:
     """
     Process artists concurrently with streaming JSONL output.
-    
+
     Responses are written to the JSONL file immediately after successful
     API calls and database commits, ensuring memory-efficient processing
     and fault-tolerant operation.
@@ -253,25 +254,28 @@ def process_artists_concurrent(
         future_to_connection = {}
         for i, artist in enumerate(artists):
             worker_id = f"W{i % max_workers + 1:02d}"  # W01, W02, W03, etc.
-            
+
             # Get database connection if pool is provided
             db_connection = None
             if db_pool is not None:
                 try:
                     db_connection = get_db_connection(db_pool)
                 except Exception as e:
-                    logger.warning(f"Failed to get database connection for {artist.name}: {e}")
-            
+                    logger.warning(
+                        f"Failed to get database connection for {artist.name}: {e}"
+                    )
+
             future = executor.submit(
-                call_openai_api, 
-                client, 
-                artist, 
-                prompt_id, 
-                version, 
+                call_openai_api,
+                client,
+                artist,
+                prompt_id,
+                version,
                 worker_id,
                 db_connection,
                 False,  # skip_existing
-                test_mode
+                test_mode,
+                rate_limiter,
             )
             future_to_artist[future] = artist
             future_to_worker[future] = worker_id
@@ -286,14 +290,20 @@ def process_artists_concurrent(
 
                 if api_response.error:
                     failed_calls += 1
-                    
+
                     # Stream error response to JSONL file
                     try:
-                        append_jsonl_response(api_response, output_path, prompt_id, version)
-                        logger.debug(f"Streamed error response for '{artist.name}' to {output_path}")
+                        append_jsonl_response(
+                            api_response, output_path, prompt_id, version
+                        )
+                        logger.debug(
+                            f"Streamed error response for '{artist.name}' to {output_path}"
+                        )
                     except Exception as e:
-                        logger.error(f"Failed to stream error response for '{artist.name}': {e}")
-                    
+                        logger.error(
+                            f"Failed to stream error response for '{artist.name}': {e}"
+                        )
+
                     log_progress_update(
                         successful_calls + failed_calls,
                         len(artists),
@@ -304,14 +314,20 @@ def process_artists_concurrent(
                     )
                 else:
                     successful_calls += 1
-                    
-                    # Stream successful response to JSONL file immediately  
+
+                    # Stream successful response to JSONL file immediately
                     try:
-                        append_jsonl_response(api_response, output_path, prompt_id, version)
-                        logger.debug(f"Streamed response for '{artist.name}' to {output_path}")
+                        append_jsonl_response(
+                            api_response, output_path, prompt_id, version
+                        )
+                        logger.debug(
+                            f"Streamed response for '{artist.name}' to {output_path}"
+                        )
                     except Exception as e:
-                        logger.error(f"Failed to stream response for '{artist.name}': {e}")
-                    
+                        logger.error(
+                            f"Failed to stream response for '{artist.name}': {e}"
+                        )
+
                     log_progress_update(
                         successful_calls + failed_calls,
                         len(artists),
@@ -338,16 +354,27 @@ def process_artists_concurrent(
                     created=0,
                     error=error_msg,
                 )
-                
+
                 # Stream exception error response to JSONL file
                 try:
-                    append_jsonl_response(error_response, output_path, prompt_id, version)
-                    logger.debug(f"Streamed exception error response for '{artist.name}' to {output_path}")
+                    append_jsonl_response(
+                        error_response, output_path, prompt_id, version
+                    )
+                    logger.debug(
+                        f"Streamed exception error response for '{artist.name}' to {output_path}"
+                    )
                 except Exception as stream_e:
-                    logger.error(f"Failed to stream exception error response for '{artist.name}': {stream_e}")
-                
+                    logger.error(
+                        f"Failed to stream exception error response for '{artist.name}': {stream_e}"
+                    )
+
                 log_progress_update(
-                    successful_calls + failed_calls, len(artists), artist.name, False, 0.0, worker_id
+                    successful_calls + failed_calls,
+                    len(artists),
+                    artist.name,
+                    False,
+                    0.0,
+                    worker_id,
                 )
                 logger.error(
                     f"[{worker_id}] Thread error processing artist '{artist.name}': {error_msg}"
@@ -370,9 +397,7 @@ def process_artists_concurrent(
             ):  # At least every 5 seconds
 
                 elapsed_time = current_time - last_progress_time
-                current_rate = (
-                    total_processed / elapsed_time if elapsed_time > 0 else 0
-                )
+                current_rate = total_processed / elapsed_time if elapsed_time > 0 else 0
                 remaining_artists = len(artists) - total_processed
                 estimated_remaining_time = (
                     remaining_artists / current_rate if current_rate > 0 else 0
