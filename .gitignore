@@ -104,6 +104,9 @@ out.jsonl
 output/
 results/
 
+# Temporary files
+tmp/
+
 # IDE
 .vscode/
 .idea/
