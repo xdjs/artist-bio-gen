@@ -44,7 +44,12 @@ class TestProcessorDbPool(unittest.TestCase):
         artists = _make_artists(4)
         pool = FakePool()
 
-        def fake_call_openai_api(client, artist, prompt_id, version, worker_id, db_connection, skip_existing, test_mode):
+        def fake_call_openai_api(client, artist, prompt_id, version, worker_id, db_pool, skip_existing, test_mode):
+            # Simulate the new behavior where call_openai_api acquires and releases connections
+            if db_pool is not None:
+                conn = db_pool.getconn()  # Simulate getting connection
+                db_pool.putconn(conn)     # Simulate releasing connection
+            
             # Return a minimal successful response and duration
             return (
                 ApiResponse(
@@ -91,7 +96,12 @@ class TestProcessorDbPool(unittest.TestCase):
         artists = _make_artists(3)
         pool = FakePool()
 
-        def fake_call_openai_api_fail(*args, **kwargs):
+        def fake_call_openai_api_fail(client, artist, prompt_id, version, worker_id, db_pool, skip_existing, test_mode):
+            # Simulate the new behavior where call_openai_api acquires and releases connections
+            # even when an error occurs later in the function
+            if db_pool is not None:
+                conn = db_pool.getconn()  # Simulate getting connection
+                db_pool.putconn(conn)     # Simulate releasing connection
             raise RuntimeError("boom")
 
         # Create temporary JSONL output file

@@ -46,11 +46,12 @@ def create_db_connection_pool(config: DatabaseConfig) -> Optional["ConnectionPoo
             f"Creating database connection pool (size={config.pool_size}, max_overflow={config.max_overflow})"
         )
 
-        # Create connection pool
+        # Create connection pool with timeout configuration
         connection_pool = ConnectionPool(
             config.url,
             min_size=1,  # Minimum connections to keep open
             max_size=config.pool_size + config.max_overflow,
+            timeout=config.connection_timeout,  # Connection acquisition timeout
             open=True,  # Open the pool immediately
         )
 
@@ -77,6 +78,11 @@ def get_db_connection(pool: "ConnectionPool") -> Optional["psycopg3.Connection"]
         return None
 
     try:
+        # Log pool status before acquiring connection
+        if hasattr(pool, '_pool'):
+            available = pool._pool.qsize() if hasattr(pool._pool, 'qsize') else "unknown"
+            logger.debug(f"Connection pool status before acquire - Available: {available}")
+        
         connection = pool.getconn()
         logger.debug("Retrieved database connection from pool")
         return connection
@@ -100,6 +106,11 @@ def release_db_connection(pool: "ConnectionPool", connection: Optional["psycopg3
     try:
         pool.putconn(connection)
         logger.debug("Returned database connection to pool")
+        
+        # Log pool status after releasing connection
+        if hasattr(pool, '_pool'):
+            available = pool._pool.qsize() if hasattr(pool._pool, 'qsize') else "unknown"
+            logger.debug(f"Connection pool status after release - Available: {available}")
     except Exception as e:
         logger.warning(f"Failed to return connection to pool: {str(e)}")
 

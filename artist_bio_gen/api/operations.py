@@ -12,7 +12,7 @@ from typing import Optional, Tuple
 from ..models import ArtistData, ApiResponse
 from ..utils import strip_trailing_citations
 from ..utils.logging import log_transaction_success, log_transaction_failure
-from ..database import update_artist_bio
+from ..database import update_artist_bio, get_db_connection, release_db_connection
 from .utils import retry_with_exponential_backoff
 
 try:
@@ -32,7 +32,7 @@ def call_openai_api(
     prompt_id: str,
     version: Optional[str] = None,
     worker_id: str = "main",
-    db_connection: Optional["psycopg3.Connection"] = None,
+    db_pool: Optional["ConnectionPool"] = None,
     skip_existing: bool = False,
     test_mode: bool = False,
 ) -> Tuple[ApiResponse, float]:
@@ -45,7 +45,7 @@ def call_openai_api(
         prompt_id: OpenAI prompt ID
         version: Optional prompt version
         worker_id: Unique identifier for the worker thread
-        db_connection: Database connection for writing bio (optional)
+        db_pool: Database connection pool for writing bio (optional)
         skip_existing: If True, skip database update if bio already exists
         test_mode: If True, use test database table
 
@@ -91,44 +91,55 @@ def call_openai_api(
         end_time = time.time()
         duration = end_time - start_time
 
-        # Attempt database write if connection provided
+        # Attempt database write if pool provided
         db_status = "null"  # Default status when no database operation
-        if db_connection is not None:
+        if db_pool is not None:
+            db_connection = None
             try:
-                db_result = update_artist_bio(
-                    connection=db_connection,
-                    artist_id=artist.artist_id,
-                    bio=response_text,
-                    skip_existing=skip_existing,
-                    test_mode=test_mode,
-                    worker_id=worker_id,
-                )
-
-                if db_result.success:
-                    if db_result.rows_affected > 0:
-                        db_status = "updated"
-                        logger.debug(
-                            f"[{worker_id}] 💾 Database updated for {artist.name}"
-                        )
-                    else:
-                        db_status = "skipped"
-                        logger.debug(
-                            f"[{worker_id}] ⏭️ Database update skipped for {artist.name}"
-                        )
-                else:
+                # Get database connection just before database operation
+                db_connection = get_db_connection(db_pool)
+                if db_connection is None:
                     db_status = "error"
-                    logger.warning(
-                        f"[{worker_id}] 💥 Database update failed for {artist.name}: {db_result.error}"
+                    logger.warning(f"[{worker_id}] 💥 Failed to get database connection for {artist.name}")
+                else:
+                    db_result = update_artist_bio(
+                        connection=db_connection,
+                        artist_id=artist.artist_id,
+                        bio=response_text,
+                        skip_existing=skip_existing,
+                        test_mode=test_mode,
+                        worker_id=worker_id,
                     )
+
+                    if db_result.success:
+                        if db_result.rows_affected > 0:
+                            db_status = "updated"
+                            logger.debug(
+                                f"[{worker_id}] 💾 Database updated for {artist.name}"
+                            )
+                        else:
+                            db_status = "skipped"
+                            logger.debug(
+                                f"[{worker_id}] ⏭️ Database update skipped for {artist.name}"
+                            )
+                    else:
+                        db_status = "error"
+                        logger.warning(
+                            f"[{worker_id}] 💥 Database update failed for {artist.name}: {db_result.error}"
+                        )
 
             except Exception as db_error:
                 db_status = "error"
                 logger.error(
                     f"[{worker_id}] 💥 Database update error for {artist.name}: {str(db_error)}"
                 )
+            finally:
+                # Always release the database connection back to the pool
+                if db_connection is not None:
+                    release_db_connection(db_pool, db_connection)
         
         # Log structured transaction information for database operations
-        if db_connection is not None:
+        if db_pool is not None:
             if db_status in ["updated", "skipped"]:
                 # Log successful transaction (including skipped as successful completion)
                 log_transaction_success(
