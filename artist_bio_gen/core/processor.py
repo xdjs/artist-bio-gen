@@ -14,7 +14,7 @@ from typing import List, Optional, Tuple
 from ..models import ArtistData, ApiResponse, ProcessingStats
 from ..api import call_openai_api
 from ..utils import create_progress_bar
-from ..database import get_db_connection, release_db_connection
+# Database connection handling now done in call_openai_api
 from .output import append_jsonl_response, initialize_jsonl_output
 
 try:
@@ -250,17 +250,8 @@ def process_artists_concurrent(
         # Submit all tasks with unique worker IDs
         future_to_artist = {}
         future_to_worker = {}
-        future_to_connection = {}
         for i, artist in enumerate(artists):
             worker_id = f"W{i % max_workers + 1:02d}"  # W01, W02, W03, etc.
-            
-            # Get database connection if pool is provided
-            db_connection = None
-            if db_pool is not None:
-                try:
-                    db_connection = get_db_connection(db_pool)
-                except Exception as e:
-                    logger.warning(f"Failed to get database connection for {artist.name}: {e}")
             
             future = executor.submit(
                 call_openai_api, 
@@ -269,13 +260,12 @@ def process_artists_concurrent(
                 prompt_id, 
                 version, 
                 worker_id,
-                db_connection,
+                db_pool,  # Pass pool instead of connection
                 False,  # skip_existing
                 test_mode
             )
             future_to_artist[future] = artist
             future_to_worker[future] = worker_id
-            future_to_connection[future] = db_connection
 
         # Process completed tasks as they finish
         for future in as_completed(future_to_artist):
@@ -352,13 +342,6 @@ def process_artists_concurrent(
                 logger.error(
                     f"[{worker_id}] Thread error processing artist '{artist.name}': {error_msg}"
                 )
-            finally:
-                # Always return DB connection to the pool if it was acquired
-                if db_pool is not None:
-                    try:
-                        release_db_connection(db_pool, future_to_connection.get(future))
-                    except Exception:
-                        pass
 
             # Log periodic progress updates during concurrent processing
             current_time = time.time()
