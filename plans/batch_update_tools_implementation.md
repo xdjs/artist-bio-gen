@@ -70,7 +70,7 @@ Create tools to generate and execute batch SQL update files from JSONL output, e
 - ✅ Generate batched UPDATE statements (1000 records per batch):
   ```sql
   \echo 'Processing batch 1/N (records 1-1000)...'
-  WITH batch AS (SELECT * FROM temp_bio_updates LIMIT 1000 OFFSET 0)
+  WITH batch AS (SELECT * FROM temp_bio_updates ORDER BY id LIMIT 1000 OFFSET 0)
   UPDATE {table_name} SET bio = batch.bio, updated_at = CURRENT_TIMESTAMP
   FROM batch WHERE {table_name}.id = batch.id;
   ```
