@@ -330,6 +330,71 @@ def write_skipped_file(invalid_entries: list, skipped_file_path: str) -> None:
         raise e
 
 
+def write_sql_file(csv_file_path: str, sql_file_path: str, table_name: str, total_records: int, batch_size: int = 1000) -> None:
+    """
+    Generate SQL script file with batched UPDATE statements.
+    
+    Args:
+        csv_file_path: Path to the CSV data file
+        sql_file_path: Path to output SQL script file
+        table_name: Target table name (artists or test_artists)
+        total_records: Total number of records to process
+        batch_size: Number of records per batch (default: 1000)
+    """
+    # Create temporary file first for atomic writes
+    temp_fd, temp_path = tempfile.mkstemp(suffix='.sql', dir=os.path.dirname(sql_file_path))
+    
+    try:
+        with os.fdopen(temp_fd, 'w', encoding='utf-8') as temp_file:
+            # Write SQL header with error handling
+            temp_file.write('\\set ON_ERROR_STOP on\n')
+            temp_file.write("\\echo 'Starting batch bio update...'\n")
+            temp_file.write('\n')
+            
+            # Begin transaction and create temp table
+            temp_file.write('BEGIN;\n')
+            temp_file.write('\n')
+            temp_file.write('CREATE TEMP TABLE temp_bio_updates (id UUID, bio TEXT);\n')
+            temp_file.write('\n')
+            
+            # Copy data from CSV file
+            csv_filename = os.path.basename(csv_file_path)
+            temp_file.write(f"\\copy temp_bio_updates FROM '{csv_filename}' WITH CSV HEADER;\n")
+            temp_file.write('\n')
+            
+            # Generate batched UPDATE statements
+            if total_records > 0:
+                num_batches = (total_records + batch_size - 1) // batch_size  # Ceiling division
+                
+                for batch_num in range(num_batches):
+                    offset = batch_num * batch_size
+                    current_batch_size = min(batch_size, total_records - offset)
+                    batch_end = offset + current_batch_size
+                    
+                    temp_file.write(f"\\echo 'Processing batch {batch_num + 1}/{num_batches} (records {offset + 1}-{batch_end})...'\n")
+                    temp_file.write(f'WITH batch AS (SELECT * FROM temp_bio_updates LIMIT {batch_size} OFFSET {offset})\n')
+                    temp_file.write(f'UPDATE {table_name} SET bio = batch.bio, updated_at = CURRENT_TIMESTAMP\n')
+                    temp_file.write(f'FROM batch WHERE {table_name}.id = batch.id;\n')
+                    temp_file.write('\n')
+            
+            # Add cleanup and summary
+            temp_file.write('SELECT COUNT(*) as total_processed FROM temp_bio_updates;\n')
+            temp_file.write('DROP TABLE temp_bio_updates;\n')
+            temp_file.write('COMMIT;\n')
+            temp_file.write("\\echo 'Batch update completed successfully!'\n")
+        
+        # Move temp file to final location
+        os.rename(temp_path, sql_file_path)
+        
+    except Exception as e:
+        # Clean up temp file on error
+        try:
+            os.unlink(temp_path)
+        except OSError:
+            pass
+        raise e
+
+
 def validate_arguments(args: argparse.Namespace) -> list:
     """
     Validate command-line arguments.
@@ -413,11 +478,18 @@ def main():
                 write_skipped_file(invalid_entries, skipped_file)
                 print(f"  Created skipped file: {skipped_file}")
             
-            # TODO: Generate SQL script file (Task 1.5)
-            print(f"  SQL file will be: {sql_file}")
+            # Generate SQL script file
+            if valid_entries:
+                write_sql_file(csv_file, sql_file, table_name, len(valid_entries))
+                print(f"  Created SQL file: {sql_file}")
+            else:
+                print(f"  No valid entries - SQL file not created")
             
             print(f"\nFile generation completed successfully!")
             print(f"  Timestamp: {timestamp}")
+            if valid_entries:
+                num_batches = (len(valid_entries) + 999) // 1000  # Ceiling division for 1000 batch size
+                print(f"  Generated {num_batches} batch(es) for {len(valid_entries)} records")
             
         except Exception as e:
             print(f"Error generating files: {str(e)}", file=sys.stderr)

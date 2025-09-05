@@ -19,7 +19,8 @@ from generate_batch_update import (
     generate_timestamp,
     generate_output_filenames,
     write_csv_file,
-    write_skipped_file
+    write_skipped_file,
+    write_sql_file
 )
 
 
@@ -736,6 +737,235 @@ class TestFileGeneration(unittest.TestCase):
             
             # No temp files should be left behind
             temp_files = [f for f in os.listdir(temp_dir) if f.endswith('.csv')]
+            self.assertEqual(len(temp_files), 0)
+            
+        finally:
+            # Cleanup any remaining files
+            for f in os.listdir(temp_dir):
+                os.unlink(os.path.join(temp_dir, f))
+            os.rmdir(temp_dir)
+
+
+class TestSQLGeneration(unittest.TestCase):
+    """Test SQL script generation functionality."""
+    
+    def test_write_sql_file_basic(self):
+        """Test basic SQL file generation."""
+        temp_dir = tempfile.mkdtemp()
+        csv_file = os.path.join(temp_dir, 'test.csv')
+        sql_file = os.path.join(temp_dir, 'test.sql')
+        
+        try:
+            write_sql_file(csv_file, sql_file, 'artists', 2)
+            
+            # Verify file exists
+            self.assertTrue(os.path.exists(sql_file))
+            
+            # Verify content
+            with open(sql_file, 'r', encoding='utf-8') as f:
+                content = f.read()
+                
+            # Should contain SQL header
+            self.assertIn('\\set ON_ERROR_STOP on', content)
+            self.assertIn("\\echo 'Starting batch bio update...'", content)
+            
+            # Should contain transaction structure
+            self.assertIn('BEGIN;', content)
+            self.assertIn('CREATE TEMP TABLE temp_bio_updates (id UUID, bio TEXT);', content)
+            self.assertIn("\\copy temp_bio_updates FROM 'test.csv' WITH CSV HEADER;", content)
+            
+            # Should contain single batch UPDATE (2 records = 1 batch)
+            self.assertIn("\\echo 'Processing batch 1/1 (records 1-2)...'", content)
+            self.assertIn('UPDATE artists SET bio = batch.bio, updated_at = CURRENT_TIMESTAMP', content)
+            
+            # Should contain cleanup
+            self.assertIn('SELECT COUNT(*) as total_processed FROM temp_bio_updates;', content)
+            self.assertIn('DROP TABLE temp_bio_updates;', content)
+            self.assertIn('COMMIT;', content)
+            self.assertIn("\\echo 'Batch update completed successfully!'", content)
+            
+        finally:
+            for f in os.listdir(temp_dir):
+                os.unlink(os.path.join(temp_dir, f))
+            os.rmdir(temp_dir)
+    
+    def test_write_sql_file_multiple_batches(self):
+        """Test SQL file generation with multiple batches."""
+        temp_dir = tempfile.mkdtemp()
+        csv_file = os.path.join(temp_dir, 'large_batch.csv')
+        sql_file = os.path.join(temp_dir, 'large_batch.sql')
+        
+        try:
+            # Generate SQL for 2500 records (should create 3 batches)
+            write_sql_file(csv_file, sql_file, 'test_artists', 2500)
+            
+            # Verify file exists
+            self.assertTrue(os.path.exists(sql_file))
+            
+            # Verify content
+            with open(sql_file, 'r', encoding='utf-8') as f:
+                content = f.read()
+                
+            # Should contain 3 batch processing statements
+            self.assertIn("\\echo 'Processing batch 1/3 (records 1-1000)...'", content)
+            self.assertIn("\\echo 'Processing batch 2/3 (records 1001-2000)...'", content)
+            self.assertIn("\\echo 'Processing batch 3/3 (records 2001-2500)...'", content)
+            
+            # Should contain correct LIMIT and OFFSET values
+            self.assertIn('LIMIT 1000 OFFSET 0', content)
+            self.assertIn('LIMIT 1000 OFFSET 1000', content)
+            self.assertIn('LIMIT 1000 OFFSET 2000', content)
+            
+            # Should use test_artists table
+            self.assertIn('UPDATE test_artists SET bio = batch.bio', content)
+            
+        finally:
+            for f in os.listdir(temp_dir):
+                os.unlink(os.path.join(temp_dir, f))
+            os.rmdir(temp_dir)
+    
+    def test_write_sql_file_empty_records(self):
+        """Test SQL file generation with zero records."""
+        temp_dir = tempfile.mkdtemp()
+        csv_file = os.path.join(temp_dir, 'empty.csv')
+        sql_file = os.path.join(temp_dir, 'empty.sql')
+        
+        try:
+            write_sql_file(csv_file, sql_file, 'artists', 0)
+            
+            # Verify file exists
+            self.assertTrue(os.path.exists(sql_file))
+            
+            # Verify content
+            with open(sql_file, 'r', encoding='utf-8') as f:
+                content = f.read()
+                
+            # Should contain basic structure but no batch processing
+            self.assertIn('\\set ON_ERROR_STOP on', content)
+            self.assertIn('CREATE TEMP TABLE temp_bio_updates (id UUID, bio TEXT);', content)
+            self.assertIn('COMMIT;', content)
+            
+            # Should NOT contain any batch processing
+            self.assertNotIn("\\echo 'Processing batch", content)
+            self.assertNotIn('UPDATE artists SET', content)
+            
+        finally:
+            for f in os.listdir(temp_dir):
+                os.unlink(os.path.join(temp_dir, f))
+            os.rmdir(temp_dir)
+    
+    def test_write_sql_file_custom_batch_size(self):
+        """Test SQL file generation with custom batch size."""
+        temp_dir = tempfile.mkdtemp()
+        csv_file = os.path.join(temp_dir, 'custom_batch.csv')
+        sql_file = os.path.join(temp_dir, 'custom_batch.sql')
+        
+        try:
+            # Generate SQL for 150 records with batch size of 50
+            write_sql_file(csv_file, sql_file, 'artists', 150, batch_size=50)
+            
+            # Verify file exists
+            self.assertTrue(os.path.exists(sql_file))
+            
+            # Verify content
+            with open(sql_file, 'r', encoding='utf-8') as f:
+                content = f.read()
+                
+            # Should contain 3 batches with size 50
+            self.assertIn("\\echo 'Processing batch 1/3 (records 1-50)...'", content)
+            self.assertIn("\\echo 'Processing batch 2/3 (records 51-100)...'", content)
+            self.assertIn("\\echo 'Processing batch 3/3 (records 101-150)...'", content)
+            
+            # Should contain correct LIMIT values
+            self.assertIn('LIMIT 50 OFFSET 0', content)
+            self.assertIn('LIMIT 50 OFFSET 50', content)
+            self.assertIn('LIMIT 50 OFFSET 100', content)
+            
+        finally:
+            for f in os.listdir(temp_dir):
+                os.unlink(os.path.join(temp_dir, f))
+            os.rmdir(temp_dir)
+    
+    def test_write_sql_file_table_names(self):
+        """Test SQL file generation with different table names."""
+        temp_dir = tempfile.mkdtemp()
+        csv_file = os.path.join(temp_dir, 'table_test.csv')
+        
+        table_names = ['artists', 'test_artists']
+        
+        for table_name in table_names:
+            sql_file = os.path.join(temp_dir, f'{table_name}.sql')
+            
+            try:
+                write_sql_file(csv_file, sql_file, table_name, 1)
+                
+                # Verify content
+                with open(sql_file, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                    
+                # Should contain correct table name in UPDATE statement
+                self.assertIn(f'UPDATE {table_name} SET bio = batch.bio', content)
+                self.assertIn(f'FROM batch WHERE {table_name}.id = batch.id;', content)
+                
+            finally:
+                if os.path.exists(sql_file):
+                    os.unlink(sql_file)
+        
+        # Cleanup
+        os.rmdir(temp_dir)
+    
+    def test_write_sql_file_csv_filename_extraction(self):
+        """Test that CSV filename is correctly extracted for \\copy command."""
+        temp_dir = tempfile.mkdtemp()
+        csv_file = os.path.join(temp_dir, 'subdir', 'complex_name_20250105_143022.csv')
+        sql_file = os.path.join(temp_dir, 'test.sql')
+        
+        # Create subdirectory
+        os.makedirs(os.path.dirname(csv_file))
+        
+        try:
+            write_sql_file(csv_file, sql_file, 'artists', 1)
+            
+            # Verify content
+            with open(sql_file, 'r', encoding='utf-8') as f:
+                content = f.read()
+                
+            # Should use only filename, not full path
+            self.assertIn("\\copy temp_bio_updates FROM 'complex_name_20250105_143022.csv' WITH CSV HEADER;", content)
+            self.assertNotIn(temp_dir, content)  # Should not contain full path
+            
+        finally:
+            for root, dirs, files in os.walk(temp_dir, topdown=False):
+                for file in files:
+                    os.unlink(os.path.join(root, file))
+                for dir in dirs:
+                    os.rmdir(os.path.join(root, dir))
+            os.rmdir(temp_dir)
+    
+    def test_write_sql_file_atomic_operations(self):
+        """Test that SQL file operations are atomic."""
+        temp_dir = tempfile.mkdtemp()
+        csv_file = os.path.join(temp_dir, 'test.csv')
+        sql_file = os.path.join(temp_dir, 'test_atomic.sql')
+        
+        try:
+            # Mock a failure during file writing to test cleanup
+            def failing_rename(src, dst):
+                # Clean up the temp file ourselves to simulate error handling
+                if os.path.exists(src):
+                    os.unlink(src)
+                raise OSError("Simulated rename failure")
+            
+            # This should fail and clean up temp file
+            with patch('os.rename', failing_rename):
+                with self.assertRaises(OSError):
+                    write_sql_file(csv_file, sql_file, 'artists', 1)
+            
+            # Final file should not exist
+            self.assertFalse(os.path.exists(sql_file))
+            
+            # No temp files should be left behind
+            temp_files = [f for f in os.listdir(temp_dir) if f.endswith('.sql')]
             self.assertEqual(len(temp_files), 0)
             
         finally:
