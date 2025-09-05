@@ -120,7 +120,7 @@ def parse_jsonl_file(file_path: str) -> Tuple[list, list, list]:
     """
     # First pass: parse all entries and collect artist_ids to detect duplicates
     all_parsed_entries = []
-    artist_id_counts = {}
+    artist_id_counts: Dict[str, int] = {}
     error_messages = []
 
     try:
@@ -374,7 +374,8 @@ def write_sql_file(
             temp_file.write("CREATE TEMP TABLE temp_bio_updates (id UUID, bio TEXT);\n")
             temp_file.write("\n")
 
-            # Copy data from CSV file
+            # Copy CSV data into the temp table using psql \copy
+            # Use only the basename so the script references a relative path
             csv_filename = os.path.basename(csv_file_path)
             temp_file.write(
                 f"\\copy temp_bio_updates FROM '{csv_filename}' WITH CSV HEADER;\n"
