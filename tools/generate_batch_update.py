@@ -7,10 +7,13 @@ using PostgreSQL COPY operations.
 """
 
 import argparse
+import csv
 import json
 import os
 import sys
+import tempfile
 import uuid
+from datetime import datetime
 from typing import Dict, Any, Optional, Tuple
 
 
@@ -232,6 +235,101 @@ Examples:
     return parser
 
 
+def generate_timestamp() -> str:
+    """
+    Generate timestamp in YYYYMMDD_HHMMSS format.
+    
+    Returns:
+        str: Formatted timestamp string
+    """
+    return datetime.now().strftime('%Y%m%d_%H%M%S')
+
+
+def generate_output_filenames(timestamp: str, output_dir: str) -> Tuple[str, str, str]:
+    """
+    Generate output filenames based on timestamp.
+    
+    Args:
+        timestamp: Timestamp string in YYYYMMDD_HHMMSS format
+        output_dir: Output directory path
+        
+    Returns:
+        Tuple[str, str, str]: (sql_file, csv_file, skipped_file) paths
+    """
+    sql_file = os.path.join(output_dir, f'batch_update_{timestamp}.sql')
+    csv_file = os.path.join(output_dir, f'batch_update_{timestamp}.csv')
+    skipped_file = os.path.join(output_dir, f'batch_update_skipped_{timestamp}.jsonl')
+    
+    return sql_file, csv_file, skipped_file
+
+
+def write_csv_file(valid_entries: list, csv_file_path: str) -> None:
+    """
+    Write valid entries to CSV file with UTF-8 support and proper escaping.
+    
+    Args:
+        valid_entries: List of valid JSONL entries
+        csv_file_path: Path to output CSV file
+    """
+    # Create temporary file first for atomic writes
+    temp_fd, temp_path = tempfile.mkstemp(suffix='.csv', dir=os.path.dirname(csv_file_path))
+    
+    try:
+        with os.fdopen(temp_fd, 'w', encoding='utf-8', newline='') as temp_file:
+            writer = csv.writer(temp_file, quoting=csv.QUOTE_ALL)
+            
+            # Write header
+            writer.writerow(['id', 'bio'])
+            
+            # Write data rows
+            for entry in valid_entries:
+                artist_id = entry['artist_id']
+                bio = entry['bio']
+                writer.writerow([artist_id, bio])
+        
+        # Move temp file to final location
+        os.rename(temp_path, csv_file_path)
+        
+    except Exception as e:
+        # Clean up temp file on error
+        try:
+            os.unlink(temp_path)
+        except OSError:
+            pass
+        raise e
+
+
+def write_skipped_file(invalid_entries: list, skipped_file_path: str) -> None:
+    """
+    Write invalid/skipped entries to JSONL file.
+    
+    Args:
+        invalid_entries: List of invalid JSONL entries
+        skipped_file_path: Path to output skipped JSONL file
+    """
+    # Create temporary file first for atomic writes
+    temp_fd, temp_path = tempfile.mkstemp(suffix='.jsonl', dir=os.path.dirname(skipped_file_path))
+    
+    try:
+        with os.fdopen(temp_fd, 'w', encoding='utf-8') as temp_file:
+            for entry in invalid_entries:
+                # Remove internal tracking fields before writing
+                clean_entry = {k: v for k, v in entry.items() if not k.startswith('_')}
+                json.dump(clean_entry, temp_file, ensure_ascii=False)
+                temp_file.write('\n')
+        
+        # Move temp file to final location
+        os.rename(temp_path, skipped_file_path)
+        
+    except Exception as e:
+        # Clean up temp file on error
+        try:
+            os.unlink(temp_path)
+        except OSError:
+            pass
+        raise e
+
+
 def validate_arguments(args: argparse.Namespace) -> list:
     """
     Validate command-line arguments.
@@ -296,8 +394,36 @@ def main():
     print(f"  Target table: {table_name}")
     print(f"  Output directory: {args.output_dir}")
     
-    # TODO: Implement file generation (Task 1.4)
-    # TODO: Implement duplicate detection (Task 1.3)
+    # Generate files if we have any data to process
+    if valid_entries or invalid_entries:
+        print(f"\nGenerating output files...")
+        
+        # Generate timestamp and filenames
+        timestamp = generate_timestamp()
+        sql_file, csv_file, skipped_file = generate_output_filenames(timestamp, args.output_dir)
+        
+        try:
+            # Write CSV file for valid entries
+            if valid_entries:
+                write_csv_file(valid_entries, csv_file)
+                print(f"  Created CSV file: {csv_file}")
+            
+            # Write skipped JSONL file for invalid entries
+            if invalid_entries:
+                write_skipped_file(invalid_entries, skipped_file)
+                print(f"  Created skipped file: {skipped_file}")
+            
+            # TODO: Generate SQL script file (Task 1.5)
+            print(f"  SQL file will be: {sql_file}")
+            
+            print(f"\nFile generation completed successfully!")
+            print(f"  Timestamp: {timestamp}")
+            
+        except Exception as e:
+            print(f"Error generating files: {str(e)}", file=sys.stderr)
+            sys.exit(1)
+    else:
+        print("\nNo data to process - no output files generated.")
 
 
 if __name__ == '__main__':
