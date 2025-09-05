@@ -24,15 +24,15 @@ Create tools to generate and execute batch SQL update files from JSONL output, e
 **File**: `tools/generate_batch_update.py`
 
 **Subtasks**:
-- Create command-line argument parser
+- ✅ Create command-line argument parser
   ```python
   --input <jsonl_file>     # Required: input JSONL file path
   --test-mode              # Optional: use test_artists table
   --output-dir <dir>       # Optional: output directory (default: cwd)
   ```
-- Implement JSONL line-by-line parser
-- Add error handling for malformed JSON lines
-- Create data validation functions:
+- ✅ Implement JSONL line-by-line parser
+- ✅ Add error handling for malformed JSON lines
+- ✅ Create data validation functions:
   - `validate_uuid_format(artist_id)` 
   - `validate_jsonl_entry(entry)`
   - `has_valid_bio(entry)` (checks error field is null/empty)
