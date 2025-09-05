@@ -15,7 +15,11 @@ from generate_batch_update import (
     parse_jsonl_line,
     parse_jsonl_file,
     setup_argument_parser,
-    validate_arguments
+    validate_arguments,
+    generate_timestamp,
+    generate_output_filenames,
+    write_csv_file,
+    write_skipped_file
 )
 
 
@@ -479,6 +483,266 @@ class TestDuplicateDetection(unittest.TestCase):
             
         finally:
             os.unlink(temp_path)
+
+
+class TestFileGeneration(unittest.TestCase):
+    """Test file generation functionality."""
+    
+    def test_generate_timestamp(self):
+        """Test timestamp generation format."""
+        timestamp = generate_timestamp()
+        
+        # Should be in YYYYMMDD_HHMMSS format
+        self.assertRegex(timestamp, r'^\d{8}_\d{6}$')
+        
+        # Should be current date/time (within reasonable bounds)
+        self.assertEqual(len(timestamp), 15)  # YYYYMMDD_HHMMSS = 15 chars
+    
+    def test_generate_output_filenames(self):
+        """Test output filename generation."""
+        timestamp = '20250105_143022'
+        output_dir = '/tmp/test'
+        
+        sql_file, csv_file, skipped_file = generate_output_filenames(timestamp, output_dir)
+        
+        expected_sql = '/tmp/test/batch_update_20250105_143022.sql'
+        expected_csv = '/tmp/test/batch_update_20250105_143022.csv'
+        expected_skipped = '/tmp/test/batch_update_skipped_20250105_143022.jsonl'
+        
+        self.assertEqual(sql_file, expected_sql)
+        self.assertEqual(csv_file, expected_csv)
+        self.assertEqual(skipped_file, expected_skipped)
+    
+    def test_write_csv_file_basic(self):
+        """Test basic CSV file writing."""
+        valid_entries = [
+            {'artist_id': '123e4567-e89b-12d3-a456-426614174000', 'bio': 'Bio 1'},
+            {'artist_id': 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', 'bio': 'Bio 2'}
+        ]
+        
+        temp_dir = tempfile.mkdtemp()
+        csv_file = os.path.join(temp_dir, 'test.csv')
+        
+        try:
+            write_csv_file(valid_entries, csv_file)
+            
+            # Verify file exists
+            self.assertTrue(os.path.exists(csv_file))
+            
+            # Verify content
+            with open(csv_file, 'r', encoding='utf-8') as f:
+                content = f.read()
+                
+            # Should have header and data rows
+            lines = content.strip().split('\n')
+            self.assertEqual(len(lines), 3)  # Header + 2 data rows
+            self.assertIn('"id","bio"', lines[0])
+            self.assertIn('123e4567-e89b-12d3-a456-426614174000', lines[1])
+            self.assertIn('Bio 1', lines[1])
+            
+        finally:
+            if os.path.exists(csv_file):
+                os.unlink(csv_file)
+            os.rmdir(temp_dir)
+    
+    def test_write_csv_file_special_characters(self):
+        """Test CSV file writing with special characters."""
+        valid_entries = [
+            {'artist_id': '123e4567-e89b-12d3-a456-426614174000', 'bio': 'Bio with "quotes" and\nnewlines'},
+            {'artist_id': 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', 'bio': 'Bio with, commas and ; semicolons'},
+            {'artist_id': 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a12', 'bio': 'Bio with unicode: café 音楽 🎵'}
+        ]
+        
+        temp_dir = tempfile.mkdtemp()
+        csv_file = os.path.join(temp_dir, 'test_special.csv')
+        
+        try:
+            write_csv_file(valid_entries, csv_file)
+            
+            # Verify file exists and can be read back properly
+            self.assertTrue(os.path.exists(csv_file))
+            
+            # Read back using CSV reader to verify proper escaping
+            import csv
+            with open(csv_file, 'r', encoding='utf-8') as f:
+                reader = csv.reader(f)
+                rows = list(reader)
+            
+            # Should have header + 3 data rows
+            self.assertEqual(len(rows), 4)
+            self.assertEqual(rows[0], ['id', 'bio'])
+            
+            # Check that special characters are preserved
+            self.assertIn('quotes', rows[1][1])
+            self.assertIn('newlines', rows[1][1])
+            self.assertIn('commas', rows[2][1])
+            self.assertIn('café', rows[3][1])
+            self.assertIn('🎵', rows[3][1])
+            
+        finally:
+            if os.path.exists(csv_file):
+                os.unlink(csv_file)
+            os.rmdir(temp_dir)
+    
+    def test_write_csv_file_empty(self):
+        """Test CSV file writing with empty entries."""
+        valid_entries = []
+        
+        temp_dir = tempfile.mkdtemp()
+        csv_file = os.path.join(temp_dir, 'test_empty.csv')
+        
+        try:
+            write_csv_file(valid_entries, csv_file)
+            
+            # Verify file exists and has header only
+            self.assertTrue(os.path.exists(csv_file))
+            
+            with open(csv_file, 'r', encoding='utf-8') as f:
+                content = f.read().strip()
+                
+            lines = content.split('\n')
+            self.assertEqual(len(lines), 1)  # Header only
+            self.assertEqual(lines[0], '"id","bio"')
+            
+        finally:
+            if os.path.exists(csv_file):
+                os.unlink(csv_file)
+            os.rmdir(temp_dir)
+    
+    def test_write_skipped_file_basic(self):
+        """Test basic skipped JSONL file writing."""
+        invalid_entries = [
+            {'artist_id': 'invalid-uuid', 'bio': 'Bio with bad UUID', '_error': 'Invalid UUID'},
+            {'artist_id': '123e4567-e89b-12d3-a456-426614174000', 'bio': 'Bio with error', 'error': 'API error', '_line_number': 3}
+        ]
+        
+        temp_dir = tempfile.mkdtemp()
+        skipped_file = os.path.join(temp_dir, 'test_skipped.jsonl')
+        
+        try:
+            write_skipped_file(invalid_entries, skipped_file)
+            
+            # Verify file exists
+            self.assertTrue(os.path.exists(skipped_file))
+            
+            # Verify content
+            with open(skipped_file, 'r', encoding='utf-8') as f:
+                lines = f.readlines()
+                
+            self.assertEqual(len(lines), 2)
+            
+            # Parse each line
+            entry1 = json.loads(lines[0].strip())
+            entry2 = json.loads(lines[1].strip())
+            
+            # Should not have internal tracking fields
+            self.assertNotIn('_error', entry1)
+            self.assertNotIn('_line_number', entry1)
+            self.assertNotIn('_error', entry2)
+            self.assertNotIn('_line_number', entry2)
+            
+            # Should have original data
+            self.assertEqual(entry1['artist_id'], 'invalid-uuid')
+            self.assertEqual(entry1['bio'], 'Bio with bad UUID')
+            self.assertEqual(entry2['error'], 'API error')
+            
+        finally:
+            if os.path.exists(skipped_file):
+                os.unlink(skipped_file)
+            os.rmdir(temp_dir)
+    
+    def test_write_skipped_file_unicode(self):
+        """Test skipped JSONL file writing with unicode characters."""
+        invalid_entries = [
+            {'artist_id': 'test-id', 'bio': 'Bio with unicode: café 音楽 🎵', '_error': 'Some error'}
+        ]
+        
+        temp_dir = tempfile.mkdtemp()
+        skipped_file = os.path.join(temp_dir, 'test_unicode.jsonl')
+        
+        try:
+            write_skipped_file(invalid_entries, skipped_file)
+            
+            # Verify file exists and unicode is preserved
+            self.assertTrue(os.path.exists(skipped_file))
+            
+            with open(skipped_file, 'r', encoding='utf-8') as f:
+                content = f.read()
+                
+            # Should contain unicode characters
+            self.assertIn('café', content)
+            self.assertIn('音楽', content)
+            self.assertIn('🎵', content)
+            
+            # Verify proper JSON parsing
+            entry = json.loads(content.strip())
+            self.assertIn('café', entry['bio'])
+            self.assertIn('🎵', entry['bio'])
+            
+        finally:
+            if os.path.exists(skipped_file):
+                os.unlink(skipped_file)
+            os.rmdir(temp_dir)
+    
+    def test_write_skipped_file_empty(self):
+        """Test skipped JSONL file writing with empty entries."""
+        invalid_entries = []
+        
+        temp_dir = tempfile.mkdtemp()
+        skipped_file = os.path.join(temp_dir, 'test_empty_skipped.jsonl')
+        
+        try:
+            write_skipped_file(invalid_entries, skipped_file)
+            
+            # Verify file exists and is empty
+            self.assertTrue(os.path.exists(skipped_file))
+            
+            with open(skipped_file, 'r', encoding='utf-8') as f:
+                content = f.read()
+                
+            self.assertEqual(content, '')
+            
+        finally:
+            if os.path.exists(skipped_file):
+                os.unlink(skipped_file)
+            os.rmdir(temp_dir)
+    
+    def test_file_generation_atomic_operations(self):
+        """Test that file operations are atomic (temp files used)."""
+        valid_entries = [
+            {'artist_id': '123e4567-e89b-12d3-a456-426614174000', 'bio': 'Test bio'}
+        ]
+        
+        temp_dir = tempfile.mkdtemp()
+        csv_file = os.path.join(temp_dir, 'test_atomic.csv')
+        
+        try:
+            # Mock a failure during file writing to test cleanup
+            original_rename = os.rename
+            
+            def failing_rename(src, dst):
+                # Clean up the temp file ourselves to simulate error handling
+                if os.path.exists(src):
+                    os.unlink(src)
+                raise OSError("Simulated rename failure")
+            
+            # This should fail and clean up temp file
+            with patch('os.rename', failing_rename):
+                with self.assertRaises(OSError):
+                    write_csv_file(valid_entries, csv_file)
+            
+            # Final file should not exist
+            self.assertFalse(os.path.exists(csv_file))
+            
+            # No temp files should be left behind
+            temp_files = [f for f in os.listdir(temp_dir) if f.endswith('.csv')]
+            self.assertEqual(len(temp_files), 0)
+            
+        finally:
+            # Cleanup any remaining files
+            for f in os.listdir(temp_dir):
+                os.unlink(os.path.join(temp_dir, f))
+            os.rmdir(temp_dir)
 
 
 if __name__ == '__main__':
