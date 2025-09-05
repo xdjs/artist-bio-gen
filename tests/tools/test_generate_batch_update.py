@@ -330,5 +330,156 @@ class TestArgumentParser(unittest.TestCase):
             os.rmdir(temp_dir)
 
 
+class TestDuplicateDetection(unittest.TestCase):
+    """Test duplicate detection functionality."""
+    
+    def test_no_duplicates(self):
+        """Test file with no duplicate artist_ids."""
+        jsonl_content = '''{"artist_id": "123e4567-e89b-12d3-a456-426614174000", "bio": "Bio 1"}
+{"artist_id": "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11", "bio": "Bio 2"}
+{"artist_id": "b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a12", "bio": "Bio 3"}'''
+        
+        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.jsonl') as f:
+            f.write(jsonl_content)
+            temp_path = f.name
+        
+        try:
+            valid_entries, invalid_entries, error_messages = parse_jsonl_file(temp_path)
+            
+            self.assertEqual(len(valid_entries), 3)
+            self.assertEqual(len(invalid_entries), 0)
+            # Only expecting parse success, no duplicate messages
+            duplicate_messages = [msg for msg in error_messages if 'Duplicate' in msg]
+            self.assertEqual(len(duplicate_messages), 0)
+            
+        finally:
+            os.unlink(temp_path)
+    
+    def test_simple_duplicates(self):
+        """Test file with simple duplicate artist_ids."""
+        jsonl_content = '''{"artist_id": "123e4567-e89b-12d3-a456-426614174000", "bio": "Bio 1"}
+{"artist_id": "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11", "bio": "Bio 2"}
+{"artist_id": "123e4567-e89b-12d3-a456-426614174000", "bio": "Bio 1 duplicate"}
+{"artist_id": "b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a12", "bio": "Bio 4"}'''
+        
+        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.jsonl') as f:
+            f.write(jsonl_content)
+            temp_path = f.name
+        
+        try:
+            valid_entries, invalid_entries, error_messages = parse_jsonl_file(temp_path)
+            
+            # Should have 2 valid entries (lines 2 and 4)
+            self.assertEqual(len(valid_entries), 2)
+            # Should have 2 invalid entries (both occurrences of duplicate artist_id)
+            self.assertEqual(len(invalid_entries), 2)
+            
+            # Check that duplicate error messages are present
+            duplicate_messages = [msg for msg in error_messages if 'Duplicate artist_id' in msg and 'Line' in msg]
+            self.assertEqual(len(duplicate_messages), 2)  # One for each occurrence
+            
+            # Check for duplicate detection summary
+            summary_messages = [msg for msg in error_messages if 'Duplicate detection: found' in msg]
+            self.assertEqual(len(summary_messages), 1)
+            self.assertIn('1 duplicated artist_ids affecting 2 entries', summary_messages[0])
+            
+        finally:
+            os.unlink(temp_path)
+    
+    def test_multiple_duplicates(self):
+        """Test file with multiple sets of duplicate artist_ids."""
+        jsonl_content = '''{"artist_id": "123e4567-e89b-12d3-a456-426614174000", "bio": "Bio 1"}
+{"artist_id": "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11", "bio": "Bio 2"}
+{"artist_id": "123e4567-e89b-12d3-a456-426614174000", "bio": "Bio 1 dup"}
+{"artist_id": "b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a12", "bio": "Bio 4"}
+{"artist_id": "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11", "bio": "Bio 2 dup"}
+{"artist_id": "123e4567-e89b-12d3-a456-426614174000", "bio": "Bio 1 dup2"}'''
+        
+        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.jsonl') as f:
+            f.write(jsonl_content)
+            temp_path = f.name
+        
+        try:
+            valid_entries, invalid_entries, error_messages = parse_jsonl_file(temp_path)
+            
+            # Should have 1 valid entry (line 4 only)
+            self.assertEqual(len(valid_entries), 1)
+            # Should have 5 invalid entries (all duplicate occurrences)
+            self.assertEqual(len(invalid_entries), 5)
+            
+            # Check that duplicate error messages are present for each occurrence
+            duplicate_messages = [msg for msg in error_messages if 'Duplicate artist_id' in msg and 'Line' in msg]
+            self.assertEqual(len(duplicate_messages), 5)  # All 5 duplicate occurrences
+            
+            # Check for duplicate detection summary
+            summary_messages = [msg for msg in error_messages if 'Duplicate detection: found' in msg]
+            self.assertEqual(len(summary_messages), 1)
+            self.assertIn('2 duplicated artist_ids affecting 5 entries', summary_messages[0])
+            
+        finally:
+            os.unlink(temp_path)
+    
+    def test_duplicates_with_invalid_entries(self):
+        """Test duplicate detection with mix of valid, invalid, and duplicate entries."""
+        jsonl_content = '''{"artist_id": "123e4567-e89b-12d3-a456-426614174000", "bio": "Valid bio"}
+{"artist_id": "invalid-uuid", "bio": "Bio with bad UUID"}
+{"artist_id": "123e4567-e89b-12d3-a456-426614174000", "bio": "Duplicate valid bio"}
+{"artist_id": "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11", "bio": "Bio with error", "error": "API error"}
+{"artist_id": "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11", "bio": "Another entry", "error": "Another error"}
+{"artist_id": "b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a12", "bio": "Valid unique bio"}'''
+        
+        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.jsonl') as f:
+            f.write(jsonl_content)
+            temp_path = f.name
+        
+        try:
+            valid_entries, invalid_entries, error_messages = parse_jsonl_file(temp_path)
+            
+            # Should have 1 valid entry (line 6 only)
+            self.assertEqual(len(valid_entries), 1)
+            # Should have 5 invalid entries (1 bad UUID + 4 duplicates)
+            self.assertEqual(len(invalid_entries), 5)
+            
+            # Check error message types
+            uuid_error_messages = [msg for msg in error_messages if 'Invalid UUID format' in msg]
+            duplicate_messages = [msg for msg in error_messages if 'Duplicate artist_id' in msg and 'Line' in msg]
+            
+            self.assertEqual(len(uuid_error_messages), 1)
+            self.assertEqual(len(duplicate_messages), 4)  # 2 + 2 duplicate occurrences
+            
+        finally:
+            os.unlink(temp_path)
+    
+    def test_duplicate_detection_preserves_line_numbers(self):
+        """Test that duplicate detection preserves original line numbers."""
+        jsonl_content = '''{"artist_id": "123e4567-e89b-12d3-a456-426614174000", "bio": "Bio 1"}
+
+{"artist_id": "123e4567-e89b-12d3-a456-426614174000", "bio": "Bio 1 duplicate"}'''
+        
+        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.jsonl') as f:
+            f.write(jsonl_content)
+            temp_path = f.name
+        
+        try:
+            valid_entries, invalid_entries, error_messages = parse_jsonl_file(temp_path)
+            
+            # Check that line numbers are correctly reported
+            duplicate_messages = [msg for msg in error_messages if 'Duplicate artist_id' in msg and 'Line' in msg]
+            self.assertEqual(len(duplicate_messages), 2)
+            
+            # Should report correct line numbers (1 and 3, skipping empty line 2)
+            line_numbers = []
+            for msg in duplicate_messages:
+                if 'Line 1:' in msg:
+                    line_numbers.append(1)
+                elif 'Line 3:' in msg:
+                    line_numbers.append(3)
+            
+            self.assertEqual(sorted(line_numbers), [1, 3])
+            
+        finally:
+            os.unlink(temp_path)
+
+
 if __name__ == '__main__':
     unittest.main()

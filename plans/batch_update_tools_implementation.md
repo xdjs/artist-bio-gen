@@ -39,10 +39,10 @@ Create tools to generate and execute batch SQL update files from JSONL output, e
 
 ### Task 1.3: Implement Duplicate Detection
 **Subtasks**:
-- Create `artist_id` tracking set for duplicates
-- Process entries in order, detect duplicates
-- Move ALL occurrences of duplicated `artist_id` to skipped file
-- Log duplicate detection with counts
+- ✅ Create `artist_id` tracking set for duplicates
+- ✅ Process entries in order, detect duplicates
+- ✅ Move ALL occurrences of duplicated `artist_id` to skipped file
+- ✅ Log duplicate detection with counts
 
 ### Task 1.4: Implement File Generation System
 **Subtasks**:
