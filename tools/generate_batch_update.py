@@ -105,7 +105,7 @@ def parse_jsonl_line(line: str, line_number: int) -> Tuple[Optional[Dict[str, An
 
 def parse_jsonl_file(file_path: str) -> Tuple[list, list, list]:
     """
-    Parse JSONL file line by line with comprehensive error handling.
+    Parse JSONL file line by line with comprehensive error handling and duplicate detection.
     
     Args:
         file_path: Path to the JSONL input file
@@ -113,8 +113,9 @@ def parse_jsonl_file(file_path: str) -> Tuple[list, list, list]:
     Returns:
         Tuple[list, list, list]: (valid_entries, invalid_entries, error_messages)
     """
-    valid_entries = []
-    invalid_entries = []
+    # First pass: parse all entries and collect artist_ids to detect duplicates
+    all_parsed_entries = []
+    artist_id_counts = {}
     error_messages = []
     
     try:
@@ -130,26 +131,64 @@ def parse_jsonl_file(file_path: str) -> Tuple[list, list, list]:
                 if entry is None:  # Empty line
                     continue
                 
-                # Validate the entry
-                is_valid, validation_error = validate_jsonl_entry(entry)
+                # Store entry with line number for processing
+                entry['_line_number'] = line_number
+                all_parsed_entries.append(entry)
                 
-                if is_valid:
-                    valid_entries.append(entry)
-                else:
-                    error_messages.append(f"Line {line_number}: {validation_error}")
-                    # Store the invalid entry with line number for tracking
-                    entry['_line_number'] = line_number
-                    entry['_error'] = validation_error
-                    invalid_entries.append(entry)
+                # Track artist_id counts for duplicate detection
+                artist_id = entry.get('artist_id')
+                if artist_id:
+                    artist_id_counts[artist_id] = artist_id_counts.get(artist_id, 0) + 1
                     
     except FileNotFoundError:
         error_messages.append(f"Input file not found: {file_path}")
+        return [], [], error_messages
     except PermissionError:
         error_messages.append(f"Permission denied reading file: {file_path}")
+        return [], [], error_messages
     except Exception as e:
         error_messages.append(f"Unexpected error reading file: {str(e)}")
+        return [], [], error_messages
     
-    return valid_entries, invalid_entries, error_messages
+    # Identify duplicated artist_ids
+    duplicated_artist_ids = {aid for aid, count in artist_id_counts.items() if count > 1}
+    
+    # Second pass: process entries and separate valid, invalid, and duplicates
+    valid_entries = []
+    invalid_entries = []
+    duplicate_entries = []
+    
+    for entry in all_parsed_entries:
+        line_number = entry['_line_number']
+        artist_id = entry.get('artist_id')
+        
+        # Check if this artist_id is duplicated
+        if artist_id and artist_id in duplicated_artist_ids:
+            error_messages.append(f"Line {line_number}: Duplicate artist_id: {artist_id}")
+            entry['_error'] = f"Duplicate artist_id: {artist_id}"
+            duplicate_entries.append(entry)
+            continue
+        
+        # Validate the entry
+        is_valid, validation_error = validate_jsonl_entry(entry)
+        
+        if is_valid:
+            # Remove internal tracking fields before adding to valid entries
+            clean_entry = {k: v for k, v in entry.items() if not k.startswith('_')}
+            valid_entries.append(clean_entry)
+        else:
+            error_messages.append(f"Line {line_number}: {validation_error}")
+            entry['_error'] = validation_error
+            invalid_entries.append(entry)
+    
+    # Combine invalid and duplicate entries
+    all_invalid_entries = invalid_entries + duplicate_entries
+    
+    # Log duplicate detection summary
+    if duplicated_artist_ids:
+        error_messages.append(f"Duplicate detection: found {len(duplicated_artist_ids)} duplicated artist_ids affecting {sum(artist_id_counts[aid] for aid in duplicated_artist_ids)} entries")
+    
+    return valid_entries, all_invalid_entries, error_messages
 
 
 def setup_argument_parser() -> argparse.ArgumentParser:
