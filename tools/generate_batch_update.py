@@ -308,22 +308,44 @@ def write_csv_file(valid_entries: list, csv_file_path: str) -> None:
             # Write header
             writer.writerow(["id", "bio"])
 
-            # Write data rows
-            for entry in valid_entries:
-                artist_id = entry["artist_id"]
-                bio = entry["bio"]
-                writer.writerow([artist_id, bio])
+            # Write data rows with error tracking
+            rows_written = 0
+            for i, entry in enumerate(valid_entries):
+                try:
+                    artist_id = entry["artist_id"]
+                    bio = entry["bio"]
+                    writer.writerow([artist_id, bio])
+                    rows_written += 1
+                except (KeyError, TypeError) as e:
+                    print(f"Warning: Skipping entry {i+1} due to data error: {str(e)}", file=sys.stderr)
+                    continue
+                except Exception as e:
+                    raise RuntimeError(f"Failed to write CSV row {i+1}: {str(e)}") from e
 
-        # Move temp file to final location
-        os.rename(temp_path, csv_file_path)
+        # Verify temp file was written correctly
+        if rows_written == 0 and len(valid_entries) > 0:
+            raise RuntimeError("No data was written to CSV file - all entries may be invalid")
+        
+        print(f"  Successfully wrote {rows_written} rows to CSV file")
+
+        # Move temp file to final location atomically
+        try:
+            os.rename(temp_path, csv_file_path)
+        except OSError as e:
+            raise RuntimeError(f"Failed to move temporary CSV file to final location: {str(e)}") from e
 
     except Exception as e:
-        # Clean up temp file on error
+        # Enhanced cleanup with detailed error reporting
+        temp_file_exists = os.path.exists(temp_path)
         try:
-            os.unlink(temp_path)
-        except OSError:
-            pass
-        raise e
+            if temp_file_exists:
+                os.unlink(temp_path)
+                print(f"  Cleaned up temporary file: {temp_path}", file=sys.stderr)
+        except OSError as cleanup_error:
+            print(f"  Warning: Could not clean up temporary file {temp_path}: {str(cleanup_error)}", file=sys.stderr)
+        
+        # Re-raise with enhanced error context
+        raise RuntimeError(f"CSV file generation failed: {str(e)}") from e
 
 
 def write_skipped_file(invalid_entries: list, skipped_file_path: str) -> None:
@@ -342,22 +364,48 @@ def write_skipped_file(invalid_entries: list, skipped_file_path: str) -> None:
 
     try:
         with os.fdopen(temp_fd, "w", encoding="utf-8") as temp_file:
-            for entry in invalid_entries:
-                # Remove internal tracking fields before writing
-                clean_entry = {k: v for k, v in entry.items() if not k.startswith("_")}
-                json.dump(clean_entry, temp_file, ensure_ascii=False)
-                temp_file.write("\n")
+            entries_written = 0
+            for i, entry in enumerate(invalid_entries):
+                try:
+                    # Remove internal tracking fields before writing
+                    clean_entry = {k: v for k, v in entry.items() if not k.startswith("_")}
+                    json.dump(clean_entry, temp_file, ensure_ascii=False)
+                    temp_file.write("\n")
+                    entries_written += 1
+                except (TypeError, ValueError) as e:
+                    print(f"Warning: Could not serialize skipped entry {i+1}: {str(e)}", file=sys.stderr)
+                    # Write a fallback entry with error information
+                    fallback_entry = {
+                        "original_line": entry.get("_line_number", i+1),
+                        "serialization_error": str(e),
+                        "partial_data": str(entry)[:200] + ("..." if len(str(entry)) > 200 else "")
+                    }
+                    json.dump(fallback_entry, temp_file, ensure_ascii=False)
+                    temp_file.write("\n")
+                    entries_written += 1
+                except Exception as e:
+                    raise RuntimeError(f"Failed to write skipped entry {i+1}: {str(e)}") from e
 
-        # Move temp file to final location
-        os.rename(temp_path, skipped_file_path)
+        print(f"  Successfully wrote {entries_written} entries to skipped file")
+
+        # Move temp file to final location atomically
+        try:
+            os.rename(temp_path, skipped_file_path)
+        except OSError as e:
+            raise RuntimeError(f"Failed to move temporary skipped file to final location: {str(e)}") from e
 
     except Exception as e:
-        # Clean up temp file on error
+        # Enhanced cleanup with detailed error reporting
+        temp_file_exists = os.path.exists(temp_path)
         try:
-            os.unlink(temp_path)
-        except OSError:
-            pass
-        raise e
+            if temp_file_exists:
+                os.unlink(temp_path)
+                print(f"  Cleaned up temporary file: {temp_path}", file=sys.stderr)
+        except OSError as cleanup_error:
+            print(f"  Warning: Could not clean up temporary file {temp_path}: {str(cleanup_error)}", file=sys.stderr)
+        
+        # Re-raise with enhanced error context
+        raise RuntimeError(f"Skipped file generation failed: {str(e)}") from e
 
 
 def write_sql_file(
@@ -385,17 +433,24 @@ def write_sql_file(
     )
 
     try:
+        lines_written = 0
         with os.fdopen(temp_fd, "w", encoding="utf-8") as temp_file:
             # Write SQL header with error handling
             temp_file.write("\\set ON_ERROR_STOP on\n")
             temp_file.write("\\echo 'Starting batch bio update...'\n")
             temp_file.write("\n")
+            lines_written += 3
 
             # Begin transaction and create temp table
             temp_file.write("BEGIN;\n")
             temp_file.write("\n")
             temp_file.write("CREATE TEMP TABLE temp_bio_updates (id UUID, bio TEXT);\n")
             temp_file.write("\n")
+            lines_written += 4
+
+            # Verify CSV file exists before referencing it (only if we expect records)
+            if total_records > 0 and not os.path.exists(csv_file_path):
+                raise RuntimeError(f"CSV file does not exist: {csv_file_path}")
 
             # Copy CSV data into the temp table using psql \copy
             # Use only the basename so the script references a relative path
@@ -404,6 +459,7 @@ def write_sql_file(
                 f"\\copy temp_bio_updates FROM '{csv_filename}' WITH CSV HEADER;\n"
             )
             temp_file.write("\n")
+            lines_written += 2
 
             # Generate batched UPDATE statements
             if total_records > 0:
@@ -416,17 +472,21 @@ def write_sql_file(
                     current_batch_size = min(batch_size, total_records - offset)
                     batch_end = offset + current_batch_size
 
-                    temp_file.write(
-                        f"\\echo 'Processing batch {batch_num + 1}/{num_batches} (records {offset + 1}-{batch_end})...'\n"
-                    )
-                    temp_file.write(
-                        f"WITH batch AS (SELECT * FROM temp_bio_updates ORDER BY id LIMIT {batch_size} OFFSET {offset})\n"
-                    )
-                    temp_file.write(
-                        f"UPDATE {table_name} SET bio = batch.bio, updated_at = CURRENT_TIMESTAMP\n"
-                    )
-                    temp_file.write(f"FROM batch WHERE {table_name}.id = batch.id;\n")
-                    temp_file.write("\n")
+                    try:
+                        temp_file.write(
+                            f"\\echo 'Processing batch {batch_num + 1}/{num_batches} (records {offset + 1}-{batch_end})...'\n"
+                        )
+                        temp_file.write(
+                            f"WITH batch AS (SELECT * FROM temp_bio_updates ORDER BY id LIMIT {batch_size} OFFSET {offset})\n"
+                        )
+                        temp_file.write(
+                            f"UPDATE {table_name} SET bio = batch.bio, updated_at = CURRENT_TIMESTAMP\n"
+                        )
+                        temp_file.write(f"FROM batch WHERE {table_name}.id = batch.id;\n")
+                        temp_file.write("\n")
+                        lines_written += 5
+                    except Exception as e:
+                        raise RuntimeError(f"Failed to write batch {batch_num + 1} SQL statements: {str(e)}") from e
 
             # Add cleanup and summary
             temp_file.write(
@@ -434,47 +494,109 @@ def write_sql_file(
             )
             temp_file.write("DROP TABLE temp_bio_updates;\n")
             temp_file.write("COMMIT;\n")
-            temp_file.write("\\echo 'Batch update completed successfully!'\n")
+            temp_file.write("\\echo 'Batch update completed successfully!';\n")
+            lines_written += 4
 
-        # Move temp file to final location
-        os.rename(temp_path, sql_file_path)
+        print(f"  Successfully wrote {lines_written} lines to SQL script")
+
+        # Verify the SQL file has reasonable content
+        if lines_written < 10:
+            raise RuntimeError(f"SQL file appears incomplete ({lines_written} lines written)")
+
+        # Move temp file to final location atomically
+        try:
+            os.rename(temp_path, sql_file_path)
+        except OSError as e:
+            raise RuntimeError(f"Failed to move temporary SQL file to final location: {str(e)}") from e
 
     except Exception as e:
-        # Clean up temp file on error
+        # Enhanced cleanup with detailed error reporting
+        temp_file_exists = os.path.exists(temp_path)
         try:
-            os.unlink(temp_path)
-        except OSError:
-            pass
-        raise e
+            if temp_file_exists:
+                os.unlink(temp_path)
+                print(f"  Cleaned up temporary file: {temp_path}", file=sys.stderr)
+        except OSError as cleanup_error:
+            print(f"  Warning: Could not clean up temporary file {temp_path}: {str(cleanup_error)}", file=sys.stderr)
+        
+        # Re-raise with enhanced error context
+        raise RuntimeError(f"SQL file generation failed: {str(e)}") from e
 
 
 def validate_arguments(args: argparse.Namespace) -> list:
     """
-    Validate command-line arguments.
+    Validate command-line arguments with comprehensive error checking.
 
     Args:
         args: Parsed command-line arguments
 
     Returns:
-        list: List of validation error messages
+        list: List of validation error messages with detailed descriptions
     """
     errors = []
 
     # Validate input file
-    if not os.path.exists(args.input):
-        errors.append(f"Input file does not exist: {args.input}")
-    elif not os.path.isfile(args.input):
-        errors.append(f"Input path is not a file: {args.input}")
-    elif not os.access(args.input, os.R_OK):
-        errors.append(f"Input file is not readable: {args.input}")
+    input_path = os.path.abspath(args.input)
+    if not os.path.exists(input_path):
+        errors.append(f"Input file does not exist: {input_path}")
+        errors.append("  Suggestion: Check the file path and ensure the file exists")
+    elif not os.path.isfile(input_path):
+        if os.path.isdir(input_path):
+            errors.append(f"Input path is a directory, not a file: {input_path}")
+            errors.append("  Suggestion: Specify the JSONL file within the directory")
+        else:
+            errors.append(f"Input path is not a regular file: {input_path}")
+    elif not os.access(input_path, os.R_OK):
+        errors.append(f"Input file is not readable: {input_path}")
+        errors.append(f"  File permissions: {oct(os.stat(input_path).st_mode)[-3:]}")
+        errors.append("  Suggestion: Check file permissions with 'ls -la' and ensure read access")
+    else:
+        # Additional validation for readable files
+        try:
+            file_size = os.path.getsize(input_path)
+            if file_size == 0:
+                errors.append(f"Input file is empty: {input_path}")
+                errors.append("  Suggestion: Ensure the JSONL file contains data to process")
+            elif file_size > 100 * 1024 * 1024:  # 100MB warning
+                print(f"Warning: Large input file detected ({file_size:,} bytes). Processing may take longer.", file=sys.stderr)
+        except OSError as e:
+            errors.append(f"Cannot access input file metadata: {input_path}")
+            errors.append(f"  System error: {str(e)}")
 
     # Validate output directory
-    if not os.path.exists(args.output_dir):
-        errors.append(f"Output directory does not exist: {args.output_dir}")
-    elif not os.path.isdir(args.output_dir):
-        errors.append(f"Output path is not a directory: {args.output_dir}")
-    elif not os.access(args.output_dir, os.W_OK):
-        errors.append(f"Output directory is not writable: {args.output_dir}")
+    output_path = os.path.abspath(args.output_dir)
+    if not os.path.exists(output_path):
+        errors.append(f"Output directory does not exist: {output_path}")
+        errors.append("  Suggestion: Create the directory with 'mkdir -p' or choose an existing directory")
+    elif not os.path.isdir(output_path):
+        errors.append(f"Output path is not a directory: {output_path}")
+        errors.append("  Suggestion: Specify a valid directory path for output files")
+    elif not os.access(output_path, os.W_OK):
+        errors.append(f"Output directory is not writable: {output_path}")
+        errors.append(f"  Directory permissions: {oct(os.stat(output_path).st_mode)[-3:]}")
+        errors.append("  Suggestion: Check directory permissions and ensure write access")
+    else:
+        # Additional validation for writable directories
+        try:
+            # Check available disk space (warn if less than 10MB)
+            statvfs = os.statvfs(output_path)
+            available_space = statvfs.f_frsize * statvfs.f_bavail
+            if available_space < 10 * 1024 * 1024:  # 10MB
+                print(f"Warning: Low disk space in output directory ({available_space:,} bytes available).", file=sys.stderr)
+                print("  Large batch operations may fail due to insufficient space.", file=sys.stderr)
+        except (OSError, AttributeError):
+            # os.statvfs not available on all platforms (e.g., Windows)
+            pass
+
+        # Test write access by creating a temporary file
+        try:
+            test_fd, test_path = tempfile.mkstemp(dir=output_path, prefix="write_test_")
+            os.close(test_fd)
+            os.unlink(test_path)
+        except OSError as e:
+            errors.append(f"Cannot create temporary files in output directory: {output_path}")
+            errors.append(f"  System error: {str(e)}")
+            errors.append("  Suggestion: Check directory permissions and available disk space")
 
     return errors
 
@@ -540,28 +662,73 @@ def main():
             timestamp, args.output_dir
         )
 
+        # Validate we have space and permissions before starting
         try:
-            files_created = []
+            # Pre-flight check: ensure we can create all required files
+            temp_files = []
+            for file_path in [csv_file, sql_file, skipped_file]:
+                try:
+                    test_fd, test_path = tempfile.mkstemp(
+                        dir=os.path.dirname(file_path),
+                        prefix=f"preflight_{os.path.basename(file_path)}_"
+                    )
+                    os.close(test_fd)
+                    temp_files.append(test_path)
+                except OSError as e:
+                    raise RuntimeError(f"Cannot create files in output directory: {str(e)}") from e
             
+            # Clean up test files
+            for test_path in temp_files:
+                try:
+                    os.unlink(test_path)
+                except OSError:
+                    pass
+            
+            print("Pre-flight validation passed - proceeding with file generation")
+        
+        except Exception as e:
+            print(f"\n=== PRE-FLIGHT ERROR ===", file=sys.stderr)
+            print(f"File generation aborted: {str(e)}", file=sys.stderr)
+            print("Check output directory permissions and available disk space", file=sys.stderr)
+            sys.exit(1)
+
+        # File generation with comprehensive error handling
+        files_created = []
+        generation_errors = []
+        
+        try:
             # Write CSV file for valid entries
             if valid_entries:
                 print(f"Creating CSV file with {len(valid_entries)} records...")
-                write_csv_file(valid_entries, csv_file)
-                files_created.append(("CSV data file", csv_file))
+                try:
+                    write_csv_file(valid_entries, csv_file)
+                    files_created.append(("CSV data file", csv_file))
+                except Exception as e:
+                    generation_errors.append(f"CSV file generation failed: {str(e)}")
+                    raise
 
             # Write skipped JSONL file for invalid entries
             if invalid_entries:
                 print(f"Creating skipped file with {len(invalid_entries)} entries...")
-                write_skipped_file(invalid_entries, skipped_file)
-                files_created.append(("Skipped entries file", skipped_file))
+                try:
+                    write_skipped_file(invalid_entries, skipped_file)
+                    files_created.append(("Skipped entries file", skipped_file))
+                except Exception as e:
+                    generation_errors.append(f"Skipped file generation failed: {str(e)}")
+                    # Don't raise - this is not critical for the main workflow
+                    print(f"Warning: {str(e)}", file=sys.stderr)
 
             # Generate SQL script file
             if valid_entries:
                 batch_size = 1000
                 num_batches = (len(valid_entries) + batch_size - 1) // batch_size
                 print(f"Generating SQL script with {num_batches} batch(es)...")
-                write_sql_file(csv_file, sql_file, table_name, len(valid_entries))
-                files_created.append(("SQL batch script", sql_file))
+                try:
+                    write_sql_file(csv_file, sql_file, table_name, len(valid_entries))
+                    files_created.append(("SQL batch script", sql_file))
+                except Exception as e:
+                    generation_errors.append(f"SQL file generation failed: {str(e)}")
+                    raise
             else:
                 print("No valid entries - SQL file not created")
 
@@ -569,18 +736,45 @@ def main():
             print(f"Timestamp: {timestamp}")
             print(f"Files created:")
             for file_type, file_path in files_created:
-                file_size = os.path.getsize(file_path)
-                print(f"  {file_type}: {file_path} ({file_size:,} bytes)")
+                try:
+                    file_size = os.path.getsize(file_path)
+                    print(f"  {file_type}: {file_path} ({file_size:,} bytes)")
+                except OSError:
+                    print(f"  {file_type}: {file_path} (size unknown)")
             
             if valid_entries:
                 print(f"\nBatch processing details:")
                 print(f"  Records per batch: 1000")
                 print(f"  Total batches: {num_batches}")
                 print(f"  Total records to update: {len(valid_entries)}")
+            
+            if generation_errors:
+                print(f"\nWarnings during generation:")
+                for error in generation_errors:
+                    print(f"  - {error}")
 
         except Exception as e:
-            print(f"\n=== ERROR ===", file=sys.stderr)
-            print(f"Failed to generate files: {str(e)}", file=sys.stderr)
+            print(f"\n=== GENERATION ERROR ===", file=sys.stderr)
+            print(f"File generation failed: {str(e)}", file=sys.stderr)
+            
+            # Attempt cleanup of partial files
+            cleanup_successful = []
+            cleanup_failed = []
+            for file_type, file_path in files_created:
+                try:
+                    if os.path.exists(file_path):
+                        os.unlink(file_path)
+                        cleanup_successful.append(file_path)
+                except OSError as cleanup_error:
+                    cleanup_failed.append((file_path, str(cleanup_error)))
+            
+            if cleanup_successful:
+                print(f"Cleaned up partial files: {', '.join(cleanup_successful)}", file=sys.stderr)
+            if cleanup_failed:
+                print("Failed to clean up some files:", file=sys.stderr)
+                for file_path, error in cleanup_failed:
+                    print(f"  {file_path}: {error}", file=sys.stderr)
+            
             sys.exit(1)
     else:
         print("\n=== NO OUTPUT ===")

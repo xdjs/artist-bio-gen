@@ -384,6 +384,7 @@ class TestArgumentParser(unittest.TestCase):
         """Test command-line argument validation."""
         # Create a temporary file for testing
         with tempfile.NamedTemporaryFile(delete=False) as f:
+            f.write(b'{"test": "data"}')  # Add some content so file is not empty
             temp_file = f.name
 
         # Create a temporary directory for testing
@@ -403,18 +404,157 @@ class TestArgumentParser(unittest.TestCase):
             # Test invalid input file
             invalid_args = MockArgs("/nonexistent/file.jsonl", temp_dir)
             errors = validate_arguments(invalid_args)
-            self.assertEqual(len(errors), 1)
-            self.assertIn("does not exist", errors[0])
+            self.assertGreaterEqual(len(errors), 1)  # Enhanced validation may return multiple error lines
+            self.assertTrue(any("does not exist" in error for error in errors))
 
             # Test invalid output directory
             invalid_args = MockArgs(temp_file, "/nonexistent/directory")
             errors = validate_arguments(invalid_args)
-            self.assertEqual(len(errors), 1)
-            self.assertIn("does not exist", errors[0])
+            self.assertGreaterEqual(len(errors), 1)  # Enhanced validation may return multiple error lines
+            self.assertTrue(any("does not exist" in error for error in errors))
 
         finally:
             os.unlink(temp_file)
             os.rmdir(temp_dir)
+
+    def test_enhanced_argument_validation(self):
+        """Test enhanced argument validation with detailed error messages."""
+        import tempfile
+        import stat
+        
+        # Test empty file
+        with tempfile.NamedTemporaryFile(delete=False) as f:
+            empty_file = f.name
+        
+        temp_dir = tempfile.mkdtemp()
+        
+        try:
+            # Test empty file validation
+            class MockArgs:
+                def __init__(self, input_file, output_dir):
+                    self.input = input_file
+                    self.output_dir = output_dir
+            
+            args = MockArgs(empty_file, temp_dir)
+            errors = validate_arguments(args)
+            
+            # Should detect empty file
+            self.assertTrue(any("empty" in error.lower() for error in errors))
+            
+            # Test directory as input file
+            args = MockArgs(temp_dir, temp_dir)
+            errors = validate_arguments(args)
+            
+            # Should detect directory instead of file
+            self.assertTrue(any("directory" in error.lower() for error in errors))
+            
+        finally:
+            os.unlink(empty_file)
+            os.rmdir(temp_dir)
+
+
+class TestErrorHandling(unittest.TestCase):
+    """Test comprehensive error handling functionality."""
+
+    def setUp(self):
+        """Set up test fixtures."""
+        self.temp_dir = tempfile.mkdtemp()
+
+    def tearDown(self):
+        """Clean up test fixtures."""
+        import shutil
+        shutil.rmtree(self.temp_dir)
+
+    def test_csv_file_error_handling(self):
+        """Test CSV file generation error handling."""
+        # Test with malformed data that could cause CSV errors
+        malformed_entries = [
+            {"artist_id": "123e4567-e89b-12d3-a456-426614174000", "bio": "Normal bio"},
+            {"artist_id": "456e7890-e89b-12d3-a456-426614174000"},  # Missing bio
+            {"bio": "Bio without ID"},  # Missing artist_id
+        ]
+        
+        csv_file = os.path.join(self.temp_dir, "test_error.csv")
+        
+        # Should handle missing fields gracefully and continue processing
+        write_csv_file(malformed_entries, csv_file)
+        
+        # Verify file was created and contains the valid row
+        self.assertTrue(os.path.exists(csv_file))
+        with open(csv_file, 'r') as f:
+            lines = f.readlines()
+            self.assertEqual(len(lines), 2)  # Header + 1 valid data row
+            self.assertIn("123e4567-e89b-12d3-a456-426614174000", lines[1])
+
+    def test_csv_file_complete_failure(self):
+        """Test CSV file generation when all entries are invalid."""
+        # Test with all invalid entries
+        all_invalid_entries = [
+            {"bad_field": "no artist_id or bio"},
+            {"another": "bad entry"},
+        ]
+        
+        csv_file = os.path.join(self.temp_dir, "test_error.csv")
+        
+        # Should fail when no valid data can be written
+        with self.assertRaises(RuntimeError) as context:
+            write_csv_file(all_invalid_entries, csv_file)
+        
+        self.assertIn("No data was written", str(context.exception))
+
+    def test_skipped_file_error_recovery(self):
+        """Test skipped file generation with serialization errors."""
+        # Create entries that might cause serialization issues
+        problematic_entries = [
+            {"artist_id": "123e4567-e89b-12d3-a456-426614174000", "bio": "Normal entry"},
+            {"artist_id": "456e7890-e89b-12d3-a456-426614174000", "bio": "Entry with\nspecial\tchars"},
+            {"_line_number": 3, "artist_id": "invalid", "bio": None, "_error": "test error"},
+        ]
+        
+        skipped_file = os.path.join(self.temp_dir, "test_skipped.jsonl")
+        
+        # Should handle problematic entries and write fallback data
+        try:
+            write_skipped_file(problematic_entries, skipped_file)
+            self.assertTrue(os.path.exists(skipped_file))
+            
+            # Verify file contains data
+            with open(skipped_file, 'r') as f:
+                lines = f.readlines()
+                self.assertGreater(len(lines), 0)
+        except Exception as e:
+            self.fail(f"Skipped file generation should handle errors gracefully: {str(e)}")
+
+    def test_sql_file_error_validation(self):
+        """Test SQL file generation error validation."""
+        csv_file = os.path.join(self.temp_dir, "nonexistent.csv")
+        sql_file = os.path.join(self.temp_dir, "test.sql")
+        
+        # Should fail when CSV file doesn't exist
+        with self.assertRaises(RuntimeError) as context:
+            write_sql_file(csv_file, sql_file, "test_artists", 100)
+        
+        self.assertIn("CSV file does not exist", str(context.exception))
+
+    def test_atomic_file_operations(self):
+        """Test that file operations are atomic (temp files cleaned up on error)."""
+        # Create a scenario where file writing will fail
+        csv_file = os.path.join(self.temp_dir, "test.csv")
+        
+        # Create directory where file should be (causing write to fail)
+        os.makedirs(csv_file, exist_ok=True)
+        
+        valid_entries = [
+            {"artist_id": "123e4567-e89b-12d3-a456-426614174000", "bio": "Test bio"}
+        ]
+        
+        # Should fail but not leave temp files
+        with self.assertRaises(RuntimeError):
+            write_csv_file(valid_entries, csv_file)
+        
+        # Check no temp files left behind
+        temp_files = [f for f in os.listdir(self.temp_dir) if f.startswith("tmp")]
+        self.assertEqual(len(temp_files), 0, "Temporary files should be cleaned up on error")
 
 
 class TestDuplicateDetection(unittest.TestCase):
@@ -862,7 +1002,7 @@ class TestFileGeneration(unittest.TestCase):
 
             # This should fail and clean up temp file
             with patch("os.rename", failing_rename):
-                with self.assertRaises(OSError):
+                with self.assertRaises(RuntimeError):  # Now raises RuntimeError with better context
                     write_csv_file(valid_entries, csv_file)
 
             # Final file should not exist
@@ -889,6 +1029,10 @@ class TestSQLGeneration(unittest.TestCase):
         sql_file = os.path.join(temp_dir, "test.sql")
 
         try:
+            # Create the CSV file that SQL generation expects
+            with open(csv_file, 'w') as f:
+                f.write("id,bio\n123e4567-e89b-12d3-a456-426614174000,Test bio 1\n456e7890-e89b-12d3-a456-426614174000,Test bio 2\n")
+            
             write_sql_file(csv_file, sql_file, "artists", 2)
 
             # Verify file exists
@@ -938,6 +1082,12 @@ class TestSQLGeneration(unittest.TestCase):
         sql_file = os.path.join(temp_dir, "large_batch.sql")
 
         try:
+            # Create a large CSV file that SQL generation expects
+            with open(csv_file, 'w') as f:
+                f.write("id,bio\n")
+                for i in range(2500):
+                    f.write(f"123e4567-e89b-12d3-a456-426614174{i:03d},Test bio {i+1}\n")
+            
             # Generate SQL for 2500 records (should create 3 batches)
             write_sql_file(csv_file, sql_file, "test_artists", 2500)
 
@@ -1009,6 +1159,12 @@ class TestSQLGeneration(unittest.TestCase):
         sql_file = os.path.join(temp_dir, "custom_batch.sql")
 
         try:
+            # Create CSV file that SQL generation expects
+            with open(csv_file, 'w') as f:
+                f.write("id,bio\n")
+                for i in range(150):
+                    f.write(f"123e4567-e89b-12d3-a456-426614174{i:03d},Test bio {i+1}\n")
+            
             # Generate SQL for 150 records with batch size of 50
             write_sql_file(csv_file, sql_file, "artists", 150, batch_size=50)
 
@@ -1041,6 +1197,10 @@ class TestSQLGeneration(unittest.TestCase):
 
         table_names = ["artists", "test_artists"]
 
+        # Create CSV file that SQL generation expects
+        with open(csv_file, 'w') as f:
+            f.write("id,bio\n123e4567-e89b-12d3-a456-426614174000,Test bio\n")
+
         for table_name in table_names:
             sql_file = os.path.join(temp_dir, f"{table_name}.sql")
 
@@ -1060,6 +1220,8 @@ class TestSQLGeneration(unittest.TestCase):
                     os.unlink(sql_file)
 
         # Cleanup
+        if os.path.exists(csv_file):
+            os.unlink(csv_file)
         os.rmdir(temp_dir)
 
     def test_write_sql_file_csv_filename_extraction(self):
@@ -1072,6 +1234,10 @@ class TestSQLGeneration(unittest.TestCase):
         os.makedirs(os.path.dirname(csv_file))
 
         try:
+            # Create CSV file that SQL generation expects
+            with open(csv_file, 'w') as f:
+                f.write("id,bio\n123e4567-e89b-12d3-a456-426614174000,Test bio\n")
+            
             write_sql_file(csv_file, sql_file, "artists", 1)
 
             # Verify content
@@ -1100,6 +1266,10 @@ class TestSQLGeneration(unittest.TestCase):
         sql_file = os.path.join(temp_dir, "test_atomic.sql")
 
         try:
+            # Create the CSV file that SQL generation expects
+            with open(csv_file, 'w') as f:
+                f.write("id,bio\n123e4567-e89b-12d3-a456-426614174000,Test bio\n")
+
             # Mock a failure during file writing to test cleanup
             def failing_rename(src, dst):
                 # Clean up the temp file ourselves to simulate error handling
@@ -1109,7 +1279,7 @@ class TestSQLGeneration(unittest.TestCase):
 
             # This should fail and clean up temp file
             with patch("os.rename", failing_rename):
-                with self.assertRaises(OSError):
+                with self.assertRaises(RuntimeError):  # Now raises RuntimeError with better context
                     write_sql_file(csv_file, sql_file, "artists", 1)
 
             # Final file should not exist
