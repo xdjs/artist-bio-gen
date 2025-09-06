@@ -108,7 +108,7 @@ def parse_jsonl_line(
         return None, f"Line {line_number}: JSON decode error - {str(e)}"
 
 
-def parse_jsonl_file(file_path: str) -> Tuple[list, list, list]:
+def parse_jsonl_file(file_path: str) -> Tuple[list, list, list, dict]:
     """
     Parse JSONL file line by line with comprehensive error handling and duplicate detection.
 
@@ -116,24 +116,39 @@ def parse_jsonl_file(file_path: str) -> Tuple[list, list, list]:
         file_path: Path to the JSONL input file
 
     Returns:
-        Tuple[list, list, list]: (valid_entries, invalid_entries, error_messages)
+        Tuple[list, list, list, dict]: (valid_entries, invalid_entries, error_messages, statistics)
     """
     # First pass: parse all entries and collect artist_ids to detect duplicates
     all_parsed_entries = []
     artist_id_counts: Dict[str, int] = {}
     error_messages = []
+    
+    # Initialize statistics tracking
+    statistics = {
+        "total_lines_processed": 0,
+        "empty_lines": 0,
+        "json_decode_errors": 0,
+        "valid_entries": 0,
+        "invalid_entries": 0,
+        "duplicate_entries": 0,
+        "duplicated_artist_ids": 0,
+    }
 
     try:
         with open(file_path, "r", encoding="utf-8") as f:
             for line_number, line in enumerate(f, 1):
+                statistics["total_lines_processed"] += 1
+                
                 # Parse the JSON line
                 entry, parse_error = parse_jsonl_line(line, line_number)
 
                 if parse_error:
                     error_messages.append(parse_error)
+                    statistics["json_decode_errors"] += 1
                     continue
 
                 if entry is None:  # Empty line
+                    statistics["empty_lines"] += 1
                     continue
 
                 # Store entry with line number for processing
@@ -147,18 +162,19 @@ def parse_jsonl_file(file_path: str) -> Tuple[list, list, list]:
 
     except FileNotFoundError:
         error_messages.append(f"Input file not found: {file_path}")
-        return [], [], error_messages
+        return [], [], error_messages, statistics
     except PermissionError:
         error_messages.append(f"Permission denied reading file: {file_path}")
-        return [], [], error_messages
+        return [], [], error_messages, statistics
     except Exception as e:
         error_messages.append(f"Unexpected error reading file: {str(e)}")
-        return [], [], error_messages
+        return [], [], error_messages, statistics
 
     # Identify duplicated artist_ids
     duplicated_artist_ids = {
         aid for aid, count in artist_id_counts.items() if count > 1
     }
+    statistics["duplicated_artist_ids"] = len(duplicated_artist_ids)
 
     # Second pass: process entries and separate valid, invalid, and duplicates
     valid_entries = []
@@ -176,6 +192,7 @@ def parse_jsonl_file(file_path: str) -> Tuple[list, list, list]:
             )
             entry["_error"] = f"Duplicate artist_id: {artist_id}"
             duplicate_entries.append(entry)
+            statistics["duplicate_entries"] += 1
             continue
 
         # Validate the entry
@@ -185,10 +202,12 @@ def parse_jsonl_file(file_path: str) -> Tuple[list, list, list]:
             # Remove internal tracking fields before adding to valid entries
             clean_entry = {k: v for k, v in entry.items() if not k.startswith("_")}
             valid_entries.append(clean_entry)
+            statistics["valid_entries"] += 1
         else:
             error_messages.append(f"Line {line_number}: {validation_error}")
             entry["_error"] = validation_error
             invalid_entries.append(entry)
+            statistics["invalid_entries"] += 1
 
     # Combine invalid and duplicate entries
     all_invalid_entries = invalid_entries + duplicate_entries
@@ -199,7 +218,7 @@ def parse_jsonl_file(file_path: str) -> Tuple[list, list, list]:
             f"Duplicate detection: found {len(duplicated_artist_ids)} duplicated artist_ids affecting {sum(artist_id_counts[aid] for aid in duplicated_artist_ids)} entries"
         )
 
-    return valid_entries, all_invalid_entries, error_messages
+    return valid_entries, all_invalid_entries, error_messages, statistics
 
 
 def setup_argument_parser() -> argparse.ArgumentParser:
@@ -276,6 +295,7 @@ def write_csv_file(valid_entries: list, csv_file_path: str) -> None:
         valid_entries: List of valid JSONL entries
         csv_file_path: Path to output CSV file
     """
+    print(f"  Writing CSV data with {len(valid_entries)} entries...")
     # Create temporary file first for atomic writes
     temp_fd, temp_path = tempfile.mkstemp(
         suffix=".csv", dir=os.path.dirname(csv_file_path)
@@ -314,6 +334,7 @@ def write_skipped_file(invalid_entries: list, skipped_file_path: str) -> None:
         invalid_entries: List of invalid JSONL entries
         skipped_file_path: Path to output skipped JSONL file
     """
+    print(f"  Writing skipped entries with {len(invalid_entries)} entries...")
     # Create temporary file first for atomic writes
     temp_fd, temp_path = tempfile.mkstemp(
         suffix=".jsonl", dir=os.path.dirname(skipped_file_path)
@@ -356,6 +377,8 @@ def write_sql_file(
         total_records: Total number of records to process
         batch_size: Number of records per batch (default: 1000)
     """
+    num_batches = (total_records + batch_size - 1) // batch_size
+    print(f"  Generating SQL script for {total_records} records in {num_batches} batches...")
     # Create temporary file first for atomic writes
     temp_fd, temp_path = tempfile.mkstemp(
         suffix=".sql", dir=os.path.dirname(sql_file_path)
@@ -471,7 +494,7 @@ def main():
 
     # Parse JSONL file
     print(f"Processing JSONL file: {args.input}")
-    valid_entries, invalid_entries, error_messages = parse_jsonl_file(args.input)
+    valid_entries, invalid_entries, error_messages, statistics = parse_jsonl_file(args.input)
 
     # Print any error messages
     if error_messages:
@@ -479,19 +502,37 @@ def main():
         for error in error_messages:
             print(f"  {error}", file=sys.stderr)
 
-    # Print summary statistics
-    print(f"\nParsing Summary:")
-    print(f"  Valid entries: {len(valid_entries)}")
-    print(f"  Invalid entries: {len(invalid_entries)}")
-    print(f"  Parse errors: {len(error_messages)}")
-
+    # Print comprehensive summary statistics
+    print(f"\n=== PROCESSING SUMMARY ===")
+    print(f"Input file: {os.path.abspath(args.input)}")
+    print(f"Output directory: {os.path.abspath(args.output_dir)}")
     table_name = "test_artists" if args.test_mode else "artists"
-    print(f"  Target table: {table_name}")
-    print(f"  Output directory: {args.output_dir}")
+    print(f"Target table: {table_name}")
+    
+    print(f"\n--- Parsing Statistics ---")
+    print(f"Total lines processed: {statistics['total_lines_processed']}")
+    print(f"Empty lines skipped: {statistics['empty_lines']}")
+    print(f"JSON decode errors: {statistics['json_decode_errors']}")
+    
+    print(f"\n--- Entry Classification ---")
+    print(f"Valid entries: {statistics['valid_entries']}")
+    print(f"Invalid entries: {statistics['invalid_entries']}")
+    print(f"Duplicate entries: {statistics['duplicate_entries']}")
+    
+    if statistics['duplicated_artist_ids'] > 0:
+        print(f"Duplicated artist IDs: {statistics['duplicated_artist_ids']}")
+    
+    print(f"\n--- Error Summary ---")
+    print(f"Total error messages: {len(error_messages)}")
+    
+    # Calculate success rate
+    if statistics['total_lines_processed'] > 0:
+        success_rate = (statistics['valid_entries'] / statistics['total_lines_processed']) * 100
+        print(f"Processing success rate: {success_rate:.1f}%")
 
     # Generate files if we have any data to process
     if valid_entries or invalid_entries:
-        print(f"\nGenerating output files...")
+        print(f"\n=== FILE GENERATION ===")
 
         # Generate timestamp and filenames
         timestamp = generate_timestamp()
@@ -500,38 +541,54 @@ def main():
         )
 
         try:
+            files_created = []
+            
             # Write CSV file for valid entries
             if valid_entries:
+                print(f"Creating CSV file with {len(valid_entries)} records...")
                 write_csv_file(valid_entries, csv_file)
-                print(f"  Created CSV file: {csv_file}")
+                files_created.append(("CSV data file", csv_file))
 
             # Write skipped JSONL file for invalid entries
             if invalid_entries:
+                print(f"Creating skipped file with {len(invalid_entries)} entries...")
                 write_skipped_file(invalid_entries, skipped_file)
-                print(f"  Created skipped file: {skipped_file}")
+                files_created.append(("Skipped entries file", skipped_file))
 
             # Generate SQL script file
             if valid_entries:
+                batch_size = 1000
+                num_batches = (len(valid_entries) + batch_size - 1) // batch_size
+                print(f"Generating SQL script with {num_batches} batch(es)...")
                 write_sql_file(csv_file, sql_file, table_name, len(valid_entries))
-                print(f"  Created SQL file: {sql_file}")
+                files_created.append(("SQL batch script", sql_file))
             else:
-                print(f"  No valid entries - SQL file not created")
+                print("No valid entries - SQL file not created")
 
-            print(f"\nFile generation completed successfully!")
-            print(f"  Timestamp: {timestamp}")
+            print(f"\n=== GENERATION COMPLETE ===")
+            print(f"Timestamp: {timestamp}")
+            print(f"Files created:")
+            for file_type, file_path in files_created:
+                file_size = os.path.getsize(file_path)
+                print(f"  {file_type}: {file_path} ({file_size:,} bytes)")
+            
             if valid_entries:
-                num_batches = (
-                    len(valid_entries) + 999
-                ) // 1000  # Ceiling division for 1000 batch size
-                print(
-                    f"  Generated {num_batches} batch(es) for {len(valid_entries)} records"
-                )
+                print(f"\nBatch processing details:")
+                print(f"  Records per batch: 1000")
+                print(f"  Total batches: {num_batches}")
+                print(f"  Total records to update: {len(valid_entries)}")
 
         except Exception as e:
-            print(f"Error generating files: {str(e)}", file=sys.stderr)
+            print(f"\n=== ERROR ===", file=sys.stderr)
+            print(f"Failed to generate files: {str(e)}", file=sys.stderr)
             sys.exit(1)
     else:
-        print("\nNo data to process - no output files generated.")
+        print("\n=== NO OUTPUT ===")
+        print("No data to process - no output files generated.")
+        print("This could be due to:")
+        print("  - Empty input file")
+        print("  - All entries were invalid or had errors")
+        print("  - File processing errors")
 
 
 if __name__ == "__main__":

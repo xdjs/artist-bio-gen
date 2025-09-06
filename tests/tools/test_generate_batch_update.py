@@ -212,6 +212,85 @@ class TestJSONLLineParsing(unittest.TestCase):
                 self.assertEqual(error_msg, "")
 
 
+class TestStatisticsTracking(unittest.TestCase):
+    """Test statistics tracking functionality."""
+
+    def setUp(self):
+        """Set up test fixtures."""
+        self.temp_dir = tempfile.mkdtemp()
+
+    def tearDown(self):
+        """Clean up test fixtures."""
+        # Clean up temp directory
+        import shutil
+        shutil.rmtree(self.temp_dir)
+
+    def test_statistics_structure(self):
+        """Test that statistics dictionary has expected structure."""
+        # Create a simple test file
+        test_file = os.path.join(self.temp_dir, "test_stats.jsonl")
+        with open(test_file, "w") as f:
+            f.write('{"artist_id": "123e4567-e89b-12d3-a456-426614174000", "bio": "Test bio"}\n')
+        
+        valid_entries, invalid_entries, error_messages, statistics = parse_jsonl_file(test_file)
+        
+        # Check statistics structure
+        expected_keys = {
+            "total_lines_processed",
+            "empty_lines", 
+            "json_decode_errors",
+            "valid_entries",
+            "invalid_entries",
+            "duplicate_entries",
+            "duplicated_artist_ids"
+        }
+        self.assertEqual(set(statistics.keys()), expected_keys)
+        
+        # Check statistics values for single valid entry
+        self.assertEqual(statistics["total_lines_processed"], 1)
+        self.assertEqual(statistics["empty_lines"], 0)
+        self.assertEqual(statistics["json_decode_errors"], 0)
+        self.assertEqual(statistics["valid_entries"], 1)
+        self.assertEqual(statistics["invalid_entries"], 0)
+        self.assertEqual(statistics["duplicate_entries"], 0)
+        self.assertEqual(statistics["duplicated_artist_ids"], 0)
+
+    def test_statistics_with_mixed_data(self):
+        """Test statistics tracking with mixed valid/invalid data."""
+        test_file = os.path.join(self.temp_dir, "test_mixed.jsonl")
+        with open(test_file, "w") as f:
+            f.write('{"artist_id": "123e4567-e89b-12d3-a456-426614174000", "bio": "Valid bio"}\n')  # valid
+            f.write('\n')  # empty line
+            f.write('{"invalid": "json"}\n')  # missing required fields
+            f.write('not valid json\n')  # json decode error
+            f.write('{"artist_id": "456e7890-e89b-12d3-a456-426614174000", "bio": "Another valid bio"}\n')  # valid
+            f.write('{"artist_id": "123e4567-e89b-12d3-a456-426614174000", "bio": "Duplicate ID"}\n')  # duplicate
+        
+        valid_entries, invalid_entries, error_messages, statistics = parse_jsonl_file(test_file)
+        
+        # Check statistics
+        self.assertEqual(statistics["total_lines_processed"], 6)
+        self.assertEqual(statistics["empty_lines"], 1)
+        self.assertEqual(statistics["json_decode_errors"], 1)
+        self.assertEqual(statistics["valid_entries"], 1)  # Only the non-duplicate valid entry
+        self.assertEqual(statistics["invalid_entries"], 1)  # Missing fields
+        self.assertEqual(statistics["duplicate_entries"], 2)  # Both entries with same ID
+        self.assertEqual(statistics["duplicated_artist_ids"], 1)  # One unique duplicate ID
+
+    def test_statistics_with_file_errors(self):
+        """Test statistics with file access errors."""
+        # Test with non-existent file
+        non_existent = os.path.join(self.temp_dir, "does_not_exist.jsonl")
+        valid_entries, invalid_entries, error_messages, statistics = parse_jsonl_file(non_existent)
+        
+        # Should return empty statistics on file error
+        self.assertEqual(len(valid_entries), 0)
+        self.assertEqual(len(invalid_entries), 0)
+        self.assertTrue(len(error_messages) > 0)
+        self.assertIsInstance(statistics, dict)
+        self.assertEqual(statistics["total_lines_processed"], 0)
+
+
 class TestJSONLFileParsing(unittest.TestCase):
     """Test JSONL file parsing functionality."""
 
@@ -226,7 +305,7 @@ class TestJSONLFileParsing(unittest.TestCase):
             temp_path = f.name
 
         try:
-            valid_entries, invalid_entries, error_messages = parse_jsonl_file(temp_path)
+            valid_entries, invalid_entries, error_messages, statistics = parse_jsonl_file(temp_path)
 
             self.assertEqual(len(valid_entries), 3)
             self.assertEqual(len(invalid_entries), 0)
@@ -253,7 +332,7 @@ invalid json line
             temp_path = f.name
 
         try:
-            valid_entries, invalid_entries, error_messages = parse_jsonl_file(temp_path)
+            valid_entries, invalid_entries, error_messages, statistics = parse_jsonl_file(temp_path)
 
             self.assertEqual(len(valid_entries), 2)  # First and last entries
             self.assertEqual(len(invalid_entries), 2)  # Invalid UUID and error entries
@@ -266,7 +345,7 @@ invalid json line
 
     def test_parse_nonexistent_file(self):
         """Test parsing a non-existent file."""
-        valid_entries, invalid_entries, error_messages = parse_jsonl_file(
+        valid_entries, invalid_entries, error_messages, statistics = parse_jsonl_file(
             "/nonexistent/file.jsonl"
         )
 
@@ -352,7 +431,7 @@ class TestDuplicateDetection(unittest.TestCase):
             temp_path = f.name
 
         try:
-            valid_entries, invalid_entries, error_messages = parse_jsonl_file(temp_path)
+            valid_entries, invalid_entries, error_messages, statistics = parse_jsonl_file(temp_path)
 
             self.assertEqual(len(valid_entries), 3)
             self.assertEqual(len(invalid_entries), 0)
@@ -375,7 +454,7 @@ class TestDuplicateDetection(unittest.TestCase):
             temp_path = f.name
 
         try:
-            valid_entries, invalid_entries, error_messages = parse_jsonl_file(temp_path)
+            valid_entries, invalid_entries, error_messages, statistics = parse_jsonl_file(temp_path)
 
             # Should have 2 valid entries (lines 2 and 4)
             self.assertEqual(len(valid_entries), 2)
@@ -416,7 +495,7 @@ class TestDuplicateDetection(unittest.TestCase):
             temp_path = f.name
 
         try:
-            valid_entries, invalid_entries, error_messages = parse_jsonl_file(temp_path)
+            valid_entries, invalid_entries, error_messages, statistics = parse_jsonl_file(temp_path)
 
             # Should have 1 valid entry (line 4 only)
             self.assertEqual(len(valid_entries), 1)
@@ -457,7 +536,7 @@ class TestDuplicateDetection(unittest.TestCase):
             temp_path = f.name
 
         try:
-            valid_entries, invalid_entries, error_messages = parse_jsonl_file(temp_path)
+            valid_entries, invalid_entries, error_messages, statistics = parse_jsonl_file(temp_path)
 
             # Should have 1 valid entry (line 6 only)
             self.assertEqual(len(valid_entries), 1)
@@ -491,7 +570,7 @@ class TestDuplicateDetection(unittest.TestCase):
             temp_path = f.name
 
         try:
-            valid_entries, invalid_entries, error_messages = parse_jsonl_file(temp_path)
+            valid_entries, invalid_entries, error_messages, statistics = parse_jsonl_file(temp_path)
 
             # Check that line numbers are correctly reported
             duplicate_messages = [
