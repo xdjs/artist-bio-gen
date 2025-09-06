@@ -118,9 +118,9 @@ validate_database_connection() {
         return 1
     fi
     
-    # Test database connectivity
+    # Test database connectivity without password prompt
     echo "Testing database connectivity..."
-    if ! psql "$DATABASE_URL" -c "SELECT 1" >/dev/null 2>&1; then
+    if ! psql "$DATABASE_URL" --no-password -c "SELECT 1" >/dev/null 2>&1; then
         echo "Error: Failed to connect to database" >&2
         echo "Please verify your DATABASE_URL is correct and the database is accessible" >&2
         echo "DATABASE_URL format: postgresql://user:pass@host:port/dbname" >&2
