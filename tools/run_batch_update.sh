@@ -157,7 +157,99 @@ main() {
     done <<< "$discovery_output"
     
     echo "Ready to process ${#sql_files[@]} file(s) in chronological order."
-    echo "Implementation of database execution in progress..."
+    
+    # Execute SQL files and track results
+    local processed_count=0
+    local failed_count=0
+    
+    for sql_file in "${sql_files[@]}"; do
+        execute_sql_file "$sql_file" "$scan_directory"
+        if [[ $? -eq 0 ]]; then
+            ((processed_count++))
+        else
+            ((failed_count++))
+        fi
+    done
+    
+    echo
+    echo "=== EXECUTION SUMMARY ==="
+    echo "Files processed successfully: $processed_count"
+    echo "Files failed: $failed_count"
+    echo "Total files: ${#sql_files[@]}"
+    
+    if [[ $failed_count -gt 0 ]]; then
+        echo "Failed files left in place for manual review."
+        exit 1
+    else
+        echo "All files processed successfully!"
+        exit 0
+    fi
+}
+
+execute_sql_file() {
+    local sql_file="$1"
+    local base_directory="$2"
+    local basename_file
+    basename_file=$(basename "$sql_file")
+    
+    echo "Executing: $basename_file"
+    
+    # Check if corresponding CSV file exists
+    local csv_file="${sql_file%.sql}.csv"
+    if [[ ! -f "$csv_file" ]]; then
+        echo "  ERROR: Required CSV file not found: $(basename "$csv_file")" >&2
+        return 1
+    fi
+    
+    # Execute SQL file
+    local start_time
+    start_time=$(date +%s)
+    
+    if psql "$DATABASE_URL" --no-password -f "$sql_file"; then
+        local end_time
+        end_time=$(date +%s)
+        local duration=$((end_time - start_time))
+        
+        echo "  ✓ Completed successfully (${duration}s)"
+        
+        # Move processed files to processed/ subdirectory
+        create_processed_directory "$base_directory"
+        move_processed_files "$sql_file" "$csv_file" "$base_directory"
+        
+        return 0
+    else
+        echo "  ✗ Execution failed" >&2
+        return 1
+    fi
+}
+
+create_processed_directory() {
+    local base_directory="$1"
+    local processed_dir="$base_directory/processed"
+    
+    if [[ ! -d "$processed_dir" ]]; then
+        mkdir -p "$processed_dir" || {
+            echo "Error: Failed to create processed directory: $processed_dir" >&2
+            return 1
+        }
+    fi
+}
+
+move_processed_files() {
+    local sql_file="$1"
+    local csv_file="$2"
+    local base_directory="$3"
+    local processed_dir="$base_directory/processed"
+    
+    # Move SQL file
+    if ! mv "$sql_file" "$processed_dir/"; then
+        echo "  Warning: Failed to move SQL file to processed directory" >&2
+    fi
+    
+    # Move CSV file
+    if ! mv "$csv_file" "$processed_dir/"; then
+        echo "  Warning: Failed to move CSV file to processed directory" >&2
+    fi
 }
 
 if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then

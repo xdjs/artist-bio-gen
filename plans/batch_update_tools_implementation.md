@@ -133,16 +133,16 @@ Create tools to generate and execute batch SQL update files from JSONL output, e
 - ✅ Test database connectivity before processing files
 - ✅ Use `psql` command for SQL execution
 
-### Task 2.4: Implement File Execution Logic
+### Task 2.4: Implement File Execution Logic ✅
 **Subtasks**:
-- Process each SQL file in chronological order
-- Execute with `psql` and capture output to stdout
-- Handle execution errors appropriately:
+- ✅ Process each SQL file in chronological order
+- ✅ Execute with `psql` and capture output to stdout
+- ✅ Handle execution errors appropriately:
   - Continue with next file on error
   - Log error details to stdout
   - Track success/failure counts
-- Move successfully processed files to `processed/` subdirectory
-- Leave failed files in place for manual review
+- ✅ Move successfully processed files to `processed/` subdirectory
+- ✅ Leave failed files in place for manual review
 
 ### Task 2.5: Implement Progress Reporting
 **Subtasks**:
