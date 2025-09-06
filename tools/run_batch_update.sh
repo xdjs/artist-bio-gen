@@ -110,12 +110,39 @@ discover_sql_files() {
     return 0
 }
 
+validate_database_connection() {
+    if [[ -z "${DATABASE_URL:-}" ]]; then
+        echo "Error: DATABASE_URL environment variable is required" >&2
+        echo "Set it to a PostgreSQL connection URL:" >&2
+        echo "  export DATABASE_URL=postgresql://user:pass@host:port/dbname" >&2
+        return 1
+    fi
+    
+    # Test database connectivity
+    echo "Testing database connectivity..."
+    if ! psql "$DATABASE_URL" -c "SELECT 1" >/dev/null 2>&1; then
+        echo "Error: Failed to connect to database" >&2
+        echo "Please verify your DATABASE_URL is correct and the database is accessible" >&2
+        echo "DATABASE_URL format: postgresql://user:pass@host:port/dbname" >&2
+        return 1
+    fi
+    
+    echo "Database connection successful ✓"
+    return 0
+}
+
 main() {
     local scan_directory
     scan_directory=$(parse_arguments "$@")
     
     echo "Batch SQL Executor - Scanning directory: $scan_directory"
     echo "Script will execute SQL files matching pattern: batch_update_*.sql"
+    echo
+    
+    # Validate database connection before proceeding
+    if ! validate_database_connection; then
+        exit 1
+    fi
     echo
     
     local -a sql_files
