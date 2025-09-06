@@ -105,16 +105,16 @@ Create tools to generate and execute batch SQL update files from JSONL output, e
 ## Phase 2: Shell Script for SQL Execution
 **Priority: High | Estimated Time: 2-3 hours**
 
-### Task 2.1: Create Shell Script Structure
+### Task 2.1: Create Shell Script Structure ✅
 **File**: `tools/run_batch_update.sh`
 
 **Subtasks**:
-- Create executable shell script with proper shebang
-- Implement argument parsing:
+- ✅ Create executable shell script with proper shebang
+- ✅ Implement argument parsing:
   ```bash
   run_batch_update.sh [directory]  # Optional: directory to scan (default: cwd)
   ```
-- Add help text and usage information
+- ✅ Add help text and usage information
 
 ### Task 2.2: Implement SQL File Discovery
 **Subtasks**:
