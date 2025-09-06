@@ -85,14 +85,14 @@ Create tools to generate and execute batch SQL update files from JSONL output, e
 
 ### Task 1.6: Implement Logging and Statistics
 **Subtasks**:
-- Track processing statistics:
-  - Total lines processed
-  - Valid entries processed  
-  - Invalid entries skipped
-  - Duplicate entries detected
-  - Total batches generated
-- Print summary report to stdout
-- Include file paths in summary
+- ✅ Track processing statistics:
+  - ✅ Total lines processed
+  - ✅ Valid entries processed  
+  - ✅ Invalid entries skipped
+  - ✅ Duplicate entries detected
+  - ✅ Total batches generated
+- ✅ Print summary report to stdout
+- ✅ Include file paths in summary
 
 ### Task 1.7: Error Handling and Validation
 **Subtasks**:
