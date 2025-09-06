@@ -127,10 +127,9 @@ Create tools to generate and execute batch SQL update files from JSONL output, e
 **Subtasks**:
 - Read database connection parameters from environment:
   ```bash
-  PGHOST, PGPORT, PGDATABASE, PGUSER, PGPASSWORD
-  DATABASE_URL (alternative single-variable approach)
+  DATABASE_URL (PostgreSQL connection URL format)
   ```
-- Validate required environment variables are present
+- Validate required environment variable is present
 - Test database connectivity before processing files
 - Use `psql` command for SQL execution
 
