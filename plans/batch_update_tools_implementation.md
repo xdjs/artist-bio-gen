@@ -175,7 +175,7 @@ Create tools to generate and execute batch SQL update files from JSONL output, e
 
 ### Task 3.2: Create Manual Acceptance Test Plan ✅
 **Subtasks**:
-- ✅ Create comprehensive manual acceptance test plan and save as `plans/MANUAL_TEST_PLAN.md`
+- ✅ Create comprehensive manual acceptance test plan and save as `plans/BATCH_PROCESSING_MANUAL_ACCEPTANCE_TEST_PLAN.md`
 
 ### Task 3.3: Update Project Documentation
 **Subtasks**:
