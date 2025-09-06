@@ -1,16 +1,26 @@
-# Example artist data file
-# Format: artist_id,artist_name,artist_data
-# Lines starting with # are comments and will be ignored
-# Blank lines are also ignored
-# artist_id must be a valid UUID
-
-550e8400-e29b-41d4-a716-446655440000,Taylor Swift,Pop singer-songwriter known for autobiographical lyrics and genre evolution
-11111111-1111-1111-1111-111111111111,Drake,Canadian rapper and singer from Toronto
-# This is a comment line
-22222222-2222-2222-2222-222222222222,Billie Eilish,Alternative pop artist known for whisper vocals and dark themes
-
-33333333-3333-3333-3333-333333333333,The Weeknd,R&B and pop artist with atmospheric production
-# Another comment
-44444444-4444-4444-4444-444444444444,BTS,Korean boy band that popularized K-pop globally
-
-55555555-5555-5555-5555-555555555555,Artist with no additional data,
+artist_id,artist_name,artist_data
+c59eca41-9fb0-45e8-a0a8-cbc238cb58f8,Yani Mo,"{""x"": ""yani_mo"", ""spotify"": ""4tUlEJvr7Kib3TjGmIivVU"", ""instagram"": ""yanimo_"", ""youtubechannel"": ""UCyo_Z2hLD1NgMS_O8DQBf6Q""}"
+c2962e1c-ea21-4565-aa36-06908b3d5efd,SLIGHT,"{""spotify"": ""0TlnMWv7ZGzqskCKGgKmGI"", ""youtubechannel"": ""UCjm0eZHboFr6EFMQiPMBvTg""}"
+4efb14b2-ef49-429f-95f4-2f1e593e1b67,KIRINJI,"{""x"": ""kirinjiofficial"", ""spotify"": ""0O1UtbTe4ca7HabaiMhYZ7"", ""instagram"": ""kirinji_official"", ""wikipedia"": ""Kirinji_(band)"", ""soundcloud"": ""kirinji-official""}"
+c7275538-a2cc-4782-904b-15e178789dbc,Barry Hudson-Taylor,"{""x"": ""bhudson_taylor"", ""spotify"": ""3MuhX7tuEdOUvsOGg7ui02"", ""instagram"": ""bhudsontaylormusic"", ""youtubechannel"": ""UCjoP7RjRUdwVPDQVUB7e-TQ""}"
+ac471f35-11ce-4d46-ae20-7bc25c6b3b76,Krimer,"{""x"": ""officialkrimer"", ""spotify"": ""19h89UGIU0cyc07cYjJ8V1"", ""instagram"": ""krimer_"", ""soundcloud"": ""officialkrimer""}"
+db282c4e-35bc-40a4-b825-951f6f7bdb48,Dúo Dø,"{""x"": ""duodomusica"", ""spotify"": ""37pRFqq0GsFPs2oQc3Cvgh"", ""instagram"": ""duodomusica""}"
+15ae2128-fc70-4322-9a2b-71084e28f3e3,LFZ,"{""x"": ""imlfz"", ""spotify"": ""2ctQuS7yDbtf5nRRWGZmZE"", ""instagram"": ""imlfz"", ""soundcloud"": ""lfzmusic"", ""youtubechannel"": ""UCgcsAlOJLY3rBdrj2tY7eLQ""}"
+5fbd7085-efcf-436e-89ec-4a7e4cb90a16,Pablo Correa,"{""x"": ""pablocorreamus"", ""tiktok"": ""pablocorreamusica"", ""spotify"": ""4svNkqEFappDTZ3SnoEVkE"", ""instagram"": ""pablocorreamusica""}"
+b12aeedc-57d4-4352-8f40-c41c6447042a,Sorry Mom,"{""x"": ""sorrymompunk"", ""tiktok"": ""sorrymomtheband"", ""spotify"": ""0KZzhF4tqJGaVOrXXONmCX"", ""instagram"": ""sorrymomtheband"", ""youtubechannel"": ""UCuL58rlB3Fa1m424WJZfGXQ""}"
+0b7cc216-3ade-4ba5-9cae-10db34b9bdf1,Flyboy Tarantino,"{""x"": ""flyboytarantino"", ""tiktok"": ""flyboytarantino718"", ""spotify"": ""6kYViCeiqcUZXgPVdCIKBi"", ""instagram"": ""flyboytarantino"", ""soundcloud"": ""flyboy_mo27"", ""youtubechannel"": ""UCgofht7ZN1i55v2TjJh8xbw""}"
+787c96b3-e6e5-49e5-ba67-e2d075cf3666,Passenger,"{""x"": ""passengermusic"", ""tiktok"": ""passengerofficial"", ""spotify"": ""0gadJ2b9A4SKsB1RFkBb66"", ""youtube"": ""passengermusic"", ""instagram"": ""passengermusic"", ""wikipedia"": ""Passenger_(singer)"", ""soundcloud"": ""passengerofficial"", ""youtubechannel"": ""UCFHtCB_FWXQ8GpjgfYcD8-g""}"
+fa1d6353-df78-4541-943e-8a37dbecb428,The Ethels,"{""spotify"": ""7JGugOgTJLL5Fn6uzrbZlu"", ""youtubechannel"": ""UC81IkaiqliVuT9TuVsETYng""}"
+b6101185-df04-4718-b726-6752752e7507,Lower Dens,"{""x"": ""lowerdens"", ""spotify"": ""5uTJLo3c4ZHpH8oEwGxYUN"", ""instagram"": ""lowerdens"", ""soundcloud"": ""lowerdens"", ""youtubechannel"": ""UCimtPgp7DkEYYIfWy-mYahg""}"
+3f04184d-32c5-41f3-9a26-7cf5ae236a40,Picturesque,"{""x"": ""picturesqueband"", ""spotify"": ""412BedlPBwXH6Dz6xetzGI"", ""instagram"": ""picturesqueband"", ""youtubechannel"": ""UCsd2qeeBP5rxpwqWnd1B2Wg""}"
+1ea1acbe-006b-44f1-b774-6a45e9722584,Trefuego,"{""x"": ""ismokefuego"", ""tiktok"": ""treealgod"", ""spotify"": ""4HQfNWcXe8k5dlMHx4QrTP"", ""youtube"": ""TREFUEGO"", ""instagram"": ""ismokefuego""}"
+1b7506f7-0fa5-407c-8c81-4db98bc62051,Andrew Davis,"{""spotify"": ""1Q9HCWdqbiui9pOsDtYkXW"", ""wikipedia"": ""Andrew_Davis_(conductor)""}"
+d05b45b9-7f32-431d-84f7-18d39f06c077,D Double E,"{""x"": ""ddoublee7"", ""spotify"": ""6bwkMlweHsBCpI2a0C5nnN"", ""instagram"": ""omygoshitsddoublee"", ""soundcloud"": ""d-double-e-official""}"
+202f2682-b170-4415-b59f-b355357b0669,Gangsigns,"{""x"": ""gangsignspdx"", ""spotify"": ""26GlfgmapZtbyjP88oIeTs"", ""soundcloud"": ""gangsignsmusic""}"
+90540fc8-9e91-4b57-a5f9-fe92ec029950,Denis Elezi,"{""spotify"": ""18i6NrmCss6jWzOEuol44q"", ""instagram"": ""elezidenis"", ""soundcloud"": ""denis-sined-3""}"
+688e3787-506c-4487-b903-31aa3ce42c3f,Alexa Louise,"{""spotify"": ""4fj8bpAJQ1nXvmnSDKm3pI"", ""instagram"": ""alexaandguitars""}"
+631845fd-168d-458f-9a6e-e5c69731f737,Ariana DeBoo,"{""x"": ""deboogirl"", ""spotify"": ""5ZpkHItfsaTaVtErDGDJ4v"", ""youtubechannel"": ""UCrlRThXbFs2dJ0q9mCtoVDg""}"
+1beb7917-862c-4a72-91cf-1c6cc9a18dcc,Krept & Konan,"{""x"": ""kreptandkonan"", ""tiktok"": ""kreptandkonan"", ""spotify"": ""31lnFZEM6ysvjOx59VyxRE"", ""instagram"": ""kreptandkonan"", ""wikipedia"": ""Krept_and_Konan"", ""youtubechannel"": ""UC-M5yIiA0bG-yn_4CzZqVRg""}"
+9f58452a-ac9c-48e1-9b3c-02404cfa9c9e,A Sound of Thunder,"{""x"": ""asotband"", ""spotify"": ""571SRwCkLqVygKpejWCR0v"", ""youtube"": ""ASoundofThunderBand"", ""instagram"": ""asotband"", ""soundcloud"": ""asoundofthunderofficial""}"
+abb8d948-1481-4edb-9a55-2415fc987eca,Kooma,"{""x"": ""kooma_official"", ""spotify"": ""2OQpMQGdpN1kb9vf7Sn9Em"", ""instagram"": ""pwetew"", ""soundcloud"": ""koomaofficial""}"
+4b27b347-b17d-45e0-9693-68d2887c7d90,Omar Linx,"{""x"": ""omarlinx"", ""spotify"": ""6fSNDuge2fLINdnCCbpZx6"", ""instagram"": ""omarlinx"", ""soundcloud"": ""omarlinx""}"
