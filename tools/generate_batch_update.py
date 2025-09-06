@@ -65,8 +65,8 @@ def validate_jsonl_entry(entry: Dict[str, Any]) -> Tuple[bool, str]:
     if "artist_id" not in entry:
         return False, "Missing required field 'artist_id'"
 
-    if "bio" not in entry:
-        return False, "Missing required field 'bio'"
+    if "response_text" not in entry:
+        return False, "Missing required field 'response_text'"
 
     # Validate UUID format
     if not validate_uuid_format(entry["artist_id"]):
@@ -76,8 +76,8 @@ def validate_jsonl_entry(entry: Dict[str, Any]) -> Tuple[bool, str]:
     if not has_valid_bio(entry):
         return False, f"Bio has error: {entry.get('error', 'Unknown error')}"
 
-    # Check if bio content exists and is not empty
-    bio = entry.get("bio", "").strip()
+    # Check if response_text content exists and is not empty
+    bio = entry.get("response_text", "").strip()
     if not bio:
         return False, "Bio content is empty"
 
@@ -313,7 +313,7 @@ def write_csv_file(valid_entries: list, csv_file_path: str) -> None:
             for i, entry in enumerate(valid_entries):
                 try:
                     artist_id = entry["artist_id"]
-                    bio = entry["bio"]
+                    bio = entry["response_text"]
                     writer.writerow([artist_id, bio])
                     rows_written += 1
                 except (KeyError, TypeError) as e:

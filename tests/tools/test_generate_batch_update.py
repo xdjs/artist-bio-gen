@@ -95,17 +95,17 @@ class TestJSONLEntryValidation(unittest.TestCase):
         valid_entries = [
             {
                 "artist_id": "123e4567-e89b-12d3-a456-426614174000",
-                "bio": "This is a valid bio text",
+                "response_text": "This is a valid bio text",
                 "error": None,
             },
             {
                 "artist_id": "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
-                "bio": "Another valid bio",
+                "response_text": "Another valid bio",
                 "error": "",
             },
             {
                 "artist_id": "00000000-0000-0000-0000-000000000000",
-                "bio": "Valid bio without error field",
+                "response_text": "Valid bio without error field",
             },
         ]
 
@@ -121,7 +121,7 @@ class TestJSONLEntryValidation(unittest.TestCase):
             ({}, "Missing required field 'artist_id'"),
             (
                 {"artist_id": "123e4567-e89b-12d3-a456-426614174000"},
-                "Missing required field 'bio'",
+                "Missing required field 'response_text'",
             ),
         ]
 
@@ -133,7 +133,7 @@ class TestJSONLEntryValidation(unittest.TestCase):
 
     def test_invalid_uuid(self):
         """Test entries with invalid UUIDs."""
-        entry = {"artist_id": "not-a-uuid", "bio": "Valid bio text"}
+        entry = {"artist_id": "not-a-uuid", "response_text": "Valid bio text"}
 
         is_valid, error_msg = validate_jsonl_entry(entry)
         self.assertFalse(is_valid)
@@ -143,7 +143,7 @@ class TestJSONLEntryValidation(unittest.TestCase):
         """Test entries with bio errors."""
         entry = {
             "artist_id": "123e4567-e89b-12d3-a456-426614174000",
-            "bio": "Some bio text",
+            "response_text": "Some bio text",
             "error": "API rate limit exceeded",
         }
 
@@ -154,10 +154,10 @@ class TestJSONLEntryValidation(unittest.TestCase):
     def test_empty_bio(self):
         """Test entries with empty bio content."""
         entries = [
-            {"artist_id": "123e4567-e89b-12d3-a456-426614174000", "bio": ""},
+            {"artist_id": "123e4567-e89b-12d3-a456-426614174000", "response_text": ""},
             {
                 "artist_id": "123e4567-e89b-12d3-a456-426614174000",
-                "bio": "   ",  # Only whitespace
+                "response_text": "   ",  # Only whitespace
             },
         ]
 
@@ -174,7 +174,7 @@ class TestJSONLLineParsing(unittest.TestCase):
     def test_valid_json_lines(self):
         """Test parsing valid JSON lines."""
         valid_lines = [
-            '{"artist_id": "123e4567-e89b-12d3-a456-426614174000", "bio": "Test bio"}',
+            '{"artist_id": "123e4567-e89b-12d3-a456-426614174000", "response_text": "Test bio"}',
             '{"name": "test", "value": 123}',
             "{}",
         ]
@@ -230,7 +230,7 @@ class TestStatisticsTracking(unittest.TestCase):
         # Create a simple test file
         test_file = os.path.join(self.temp_dir, "test_stats.jsonl")
         with open(test_file, "w") as f:
-            f.write('{"artist_id": "123e4567-e89b-12d3-a456-426614174000", "bio": "Test bio"}\n')
+            f.write('{"artist_id": "123e4567-e89b-12d3-a456-426614174000", "response_text": "Test bio"}\n')
         
         valid_entries, invalid_entries, error_messages, statistics = parse_jsonl_file(test_file)
         
@@ -259,12 +259,12 @@ class TestStatisticsTracking(unittest.TestCase):
         """Test statistics tracking with mixed valid/invalid data."""
         test_file = os.path.join(self.temp_dir, "test_mixed.jsonl")
         with open(test_file, "w") as f:
-            f.write('{"artist_id": "123e4567-e89b-12d3-a456-426614174000", "bio": "Valid bio"}\n')  # valid
+            f.write('{"artist_id": "123e4567-e89b-12d3-a456-426614174000", "response_text": "Valid bio"}\n')  # valid
             f.write('\n')  # empty line
             f.write('{"invalid": "json"}\n')  # missing required fields
             f.write('not valid json\n')  # json decode error
-            f.write('{"artist_id": "456e7890-e89b-12d3-a456-426614174000", "bio": "Another valid bio"}\n')  # valid
-            f.write('{"artist_id": "123e4567-e89b-12d3-a456-426614174000", "bio": "Duplicate ID"}\n')  # duplicate
+            f.write('{"artist_id": "456e7890-e89b-12d3-a456-426614174000", "response_text": "Another valid bio"}\n')  # valid
+            f.write('{"artist_id": "123e4567-e89b-12d3-a456-426614174000", "response_text": "Duplicate ID"}\n')  # duplicate
         
         valid_entries, invalid_entries, error_messages, statistics = parse_jsonl_file(test_file)
         
@@ -296,9 +296,9 @@ class TestJSONLFileParsing(unittest.TestCase):
 
     def test_parse_valid_file(self):
         """Test parsing a valid JSONL file."""
-        jsonl_content = """{"artist_id": "123e4567-e89b-12d3-a456-426614174000", "bio": "Bio 1"}
-{"artist_id": "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11", "bio": "Bio 2"}
-{"artist_id": "00000000-0000-0000-0000-000000000000", "bio": "Bio 3"}"""
+        jsonl_content = """{"artist_id": "123e4567-e89b-12d3-a456-426614174000", "response_text": "Bio 1"}
+{"artist_id": "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11", "response_text": "Bio 2"}
+{"artist_id": "00000000-0000-0000-0000-000000000000", "response_text": "Bio 3"}"""
 
         with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".jsonl") as f:
             f.write(jsonl_content)
@@ -314,18 +314,18 @@ class TestJSONLFileParsing(unittest.TestCase):
             # Check that all entries have the expected structure
             for entry in valid_entries:
                 self.assertIn("artist_id", entry)
-                self.assertIn("bio", entry)
+                self.assertIn("response_text", entry)
 
         finally:
             os.unlink(temp_path)
 
     def test_parse_mixed_file(self):
         """Test parsing a file with both valid and invalid entries."""
-        jsonl_content = """{"artist_id": "123e4567-e89b-12d3-a456-426614174000", "bio": "Valid bio"}
-{"artist_id": "invalid-uuid", "bio": "Bio with bad UUID"}
-{"artist_id": "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11", "bio": "Valid bio", "error": "Some error"}
+        jsonl_content = """{"artist_id": "123e4567-e89b-12d3-a456-426614174000", "response_text": "Valid bio"}
+{"artist_id": "invalid-uuid", "response_text": "Bio with bad UUID"}
+{"artist_id": "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11", "response_text": "Valid bio", "error": "Some error"}
 invalid json line
-{"artist_id": "00000000-0000-0000-0000-000000000000", "bio": "Another valid bio"}"""
+{"artist_id": "00000000-0000-0000-0000-000000000000", "response_text": "Another valid bio"}"""
 
         with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".jsonl") as f:
             f.write(jsonl_content)
@@ -469,9 +469,9 @@ class TestErrorHandling(unittest.TestCase):
         """Test CSV file generation error handling."""
         # Test with malformed data that could cause CSV errors
         malformed_entries = [
-            {"artist_id": "123e4567-e89b-12d3-a456-426614174000", "bio": "Normal bio"},
+            {"artist_id": "123e4567-e89b-12d3-a456-426614174000", "response_text": "Normal bio"},
             {"artist_id": "456e7890-e89b-12d3-a456-426614174000"},  # Missing bio
-            {"bio": "Bio without ID"},  # Missing artist_id
+            {"response_text": "Bio without ID"},  # Missing artist_id
         ]
         
         csv_file = os.path.join(self.temp_dir, "test_error.csv")
@@ -506,9 +506,9 @@ class TestErrorHandling(unittest.TestCase):
         """Test skipped file generation with serialization errors."""
         # Create entries that might cause serialization issues
         problematic_entries = [
-            {"artist_id": "123e4567-e89b-12d3-a456-426614174000", "bio": "Normal entry"},
-            {"artist_id": "456e7890-e89b-12d3-a456-426614174000", "bio": "Entry with\nspecial\tchars"},
-            {"_line_number": 3, "artist_id": "invalid", "bio": None, "_error": "test error"},
+            {"artist_id": "123e4567-e89b-12d3-a456-426614174000", "response_text": "Normal entry"},
+            {"artist_id": "456e7890-e89b-12d3-a456-426614174000", "response_text": "Entry with\nspecial\tchars"},
+            {"_line_number": 3, "artist_id": "invalid", "response_text": None, "_error": "test error"},
         ]
         
         skipped_file = os.path.join(self.temp_dir, "test_skipped.jsonl")
@@ -545,7 +545,7 @@ class TestErrorHandling(unittest.TestCase):
         os.makedirs(csv_file, exist_ok=True)
         
         valid_entries = [
-            {"artist_id": "123e4567-e89b-12d3-a456-426614174000", "bio": "Test bio"}
+            {"artist_id": "123e4567-e89b-12d3-a456-426614174000", "response_text": "Test bio"}
         ]
         
         # Should fail but not leave temp files
@@ -562,9 +562,9 @@ class TestDuplicateDetection(unittest.TestCase):
 
     def test_no_duplicates(self):
         """Test file with no duplicate artist_ids."""
-        jsonl_content = """{"artist_id": "123e4567-e89b-12d3-a456-426614174000", "bio": "Bio 1"}
-{"artist_id": "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11", "bio": "Bio 2"}
-{"artist_id": "b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a12", "bio": "Bio 3"}"""
+        jsonl_content = """{"artist_id": "123e4567-e89b-12d3-a456-426614174000", "response_text": "Bio 1"}
+{"artist_id": "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11", "response_text": "Bio 2"}
+{"artist_id": "b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a12", "response_text": "Bio 3"}"""
 
         with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".jsonl") as f:
             f.write(jsonl_content)
@@ -584,10 +584,10 @@ class TestDuplicateDetection(unittest.TestCase):
 
     def test_simple_duplicates(self):
         """Test file with simple duplicate artist_ids."""
-        jsonl_content = """{"artist_id": "123e4567-e89b-12d3-a456-426614174000", "bio": "Bio 1"}
-{"artist_id": "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11", "bio": "Bio 2"}
-{"artist_id": "123e4567-e89b-12d3-a456-426614174000", "bio": "Bio 1 duplicate"}
-{"artist_id": "b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a12", "bio": "Bio 4"}"""
+        jsonl_content = """{"artist_id": "123e4567-e89b-12d3-a456-426614174000", "response_text": "Bio 1"}
+{"artist_id": "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11", "response_text": "Bio 2"}
+{"artist_id": "123e4567-e89b-12d3-a456-426614174000", "response_text": "Bio 1 duplicate"}
+{"artist_id": "b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a12", "response_text": "Bio 4"}"""
 
         with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".jsonl") as f:
             f.write(jsonl_content)
@@ -623,12 +623,12 @@ class TestDuplicateDetection(unittest.TestCase):
 
     def test_multiple_duplicates(self):
         """Test file with multiple sets of duplicate artist_ids."""
-        jsonl_content = """{"artist_id": "123e4567-e89b-12d3-a456-426614174000", "bio": "Bio 1"}
-{"artist_id": "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11", "bio": "Bio 2"}
-{"artist_id": "123e4567-e89b-12d3-a456-426614174000", "bio": "Bio 1 dup"}
-{"artist_id": "b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a12", "bio": "Bio 4"}
-{"artist_id": "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11", "bio": "Bio 2 dup"}
-{"artist_id": "123e4567-e89b-12d3-a456-426614174000", "bio": "Bio 1 dup2"}"""
+        jsonl_content = """{"artist_id": "123e4567-e89b-12d3-a456-426614174000", "response_text": "Bio 1"}
+{"artist_id": "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11", "response_text": "Bio 2"}
+{"artist_id": "123e4567-e89b-12d3-a456-426614174000", "response_text": "Bio 1 dup"}
+{"artist_id": "b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a12", "response_text": "Bio 4"}
+{"artist_id": "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11", "response_text": "Bio 2 dup"}
+{"artist_id": "123e4567-e89b-12d3-a456-426614174000", "response_text": "Bio 1 dup2"}"""
 
         with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".jsonl") as f:
             f.write(jsonl_content)
@@ -664,12 +664,12 @@ class TestDuplicateDetection(unittest.TestCase):
 
     def test_duplicates_with_invalid_entries(self):
         """Test duplicate detection with mix of valid, invalid, and duplicate entries."""
-        jsonl_content = """{"artist_id": "123e4567-e89b-12d3-a456-426614174000", "bio": "Valid bio"}
-{"artist_id": "invalid-uuid", "bio": "Bio with bad UUID"}
-{"artist_id": "123e4567-e89b-12d3-a456-426614174000", "bio": "Duplicate valid bio"}
-{"artist_id": "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11", "bio": "Bio with error", "error": "API error"}
-{"artist_id": "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11", "bio": "Another entry", "error": "Another error"}
-{"artist_id": "b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a12", "bio": "Valid unique bio"}"""
+        jsonl_content = """{"artist_id": "123e4567-e89b-12d3-a456-426614174000", "response_text": "Valid bio"}
+{"artist_id": "invalid-uuid", "response_text": "Bio with bad UUID"}
+{"artist_id": "123e4567-e89b-12d3-a456-426614174000", "response_text": "Duplicate valid bio"}
+{"artist_id": "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11", "response_text": "Bio with error", "error": "API error"}
+{"artist_id": "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11", "response_text": "Another entry", "error": "Another error"}
+{"artist_id": "b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a12", "response_text": "Valid unique bio"}"""
 
         with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".jsonl") as f:
             f.write(jsonl_content)
@@ -701,9 +701,9 @@ class TestDuplicateDetection(unittest.TestCase):
 
     def test_duplicate_detection_preserves_line_numbers(self):
         """Test that duplicate detection preserves original line numbers."""
-        jsonl_content = """{"artist_id": "123e4567-e89b-12d3-a456-426614174000", "bio": "Bio 1"}
+        jsonl_content = """{"artist_id": "123e4567-e89b-12d3-a456-426614174000", "response_text": "Bio 1"}
 
-{"artist_id": "123e4567-e89b-12d3-a456-426614174000", "bio": "Bio 1 duplicate"}"""
+{"artist_id": "123e4567-e89b-12d3-a456-426614174000", "response_text": "Bio 1 duplicate"}"""
 
         with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".jsonl") as f:
             f.write(jsonl_content)
@@ -767,8 +767,8 @@ class TestFileGeneration(unittest.TestCase):
     def test_write_csv_file_basic(self):
         """Test basic CSV file writing."""
         valid_entries = [
-            {"artist_id": "123e4567-e89b-12d3-a456-426614174000", "bio": "Bio 1"},
-            {"artist_id": "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11", "bio": "Bio 2"},
+            {"artist_id": "123e4567-e89b-12d3-a456-426614174000", "response_text": "Bio 1"},
+            {"artist_id": "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11", "response_text": "Bio 2"},
         ]
 
         temp_dir = tempfile.mkdtemp()
@@ -801,15 +801,15 @@ class TestFileGeneration(unittest.TestCase):
         valid_entries = [
             {
                 "artist_id": "123e4567-e89b-12d3-a456-426614174000",
-                "bio": 'Bio with "quotes" and\nnewlines',
+                "response_text": 'Bio with "quotes" and\nnewlines',
             },
             {
                 "artist_id": "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
-                "bio": "Bio with, commas and ; semicolons",
+                "response_text": "Bio with, commas and ; semicolons",
             },
             {
                 "artist_id": "b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a12",
-                "bio": "Bio with unicode: café 音楽 🎵",
+                "response_text": "Bio with unicode: café 音楽 🎵",
             },
         ]
 
@@ -875,12 +875,12 @@ class TestFileGeneration(unittest.TestCase):
         invalid_entries = [
             {
                 "artist_id": "invalid-uuid",
-                "bio": "Bio with bad UUID",
+                "response_text": "Bio with bad UUID",
                 "_error": "Invalid UUID",
             },
             {
                 "artist_id": "123e4567-e89b-12d3-a456-426614174000",
-                "bio": "Bio with error",
+                "response_text": "Bio with error",
                 "error": "API error",
                 "_line_number": 3,
             },
@@ -913,7 +913,7 @@ class TestFileGeneration(unittest.TestCase):
 
             # Should have original data
             self.assertEqual(entry1["artist_id"], "invalid-uuid")
-            self.assertEqual(entry1["bio"], "Bio with bad UUID")
+            self.assertEqual(entry1["response_text"], "Bio with bad UUID")
             self.assertEqual(entry2["error"], "API error")
 
         finally:
@@ -926,7 +926,7 @@ class TestFileGeneration(unittest.TestCase):
         invalid_entries = [
             {
                 "artist_id": "test-id",
-                "bio": "Bio with unicode: café 音楽 🎵",
+                "response_text": "Bio with unicode: café 音楽 🎵",
                 "_error": "Some error",
             }
         ]
@@ -950,8 +950,8 @@ class TestFileGeneration(unittest.TestCase):
 
             # Verify proper JSON parsing
             entry = json.loads(content.strip())
-            self.assertIn("café", entry["bio"])
-            self.assertIn("🎵", entry["bio"])
+            self.assertIn("café", entry["response_text"])
+            self.assertIn("🎵", entry["response_text"])
 
         finally:
             if os.path.exists(skipped_file):
@@ -984,7 +984,7 @@ class TestFileGeneration(unittest.TestCase):
     def test_file_generation_atomic_operations(self):
         """Test that file operations are atomic (temp files used)."""
         valid_entries = [
-            {"artist_id": "123e4567-e89b-12d3-a456-426614174000", "bio": "Test bio"}
+            {"artist_id": "123e4567-e89b-12d3-a456-426614174000", "response_text": "Test bio"}
         ]
 
         temp_dir = tempfile.mkdtemp()
