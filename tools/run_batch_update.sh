@@ -77,6 +77,39 @@ parse_arguments() {
     echo "$directory"
 }
 
+discover_sql_files() {
+    local directory="$1"
+    local -a sql_files=()
+    
+    # Find all files matching batch_update_*.sql pattern
+    while IFS= read -r -d '' file; do
+        sql_files+=("$file")
+    done < <(find "$directory" -maxdepth 1 -name "batch_update_*.sql" -type f -print0 2>/dev/null)
+    
+    if [[ ${#sql_files[@]} -eq 0 ]]; then
+        echo "No SQL batch files found matching pattern: batch_update_*.sql" >&2
+        return 1
+    fi
+    
+    # Sort files by timestamp (embedded in filename: batch_update_YYYYMMDD_HHMMSS.sql)
+    # This processes oldest files first
+    IFS=$'\n' sql_files=($(sort <<<"${sql_files[*]}"))
+    
+    echo "Found ${#sql_files[@]} SQL batch file(s):" >&2
+    for file in "${sql_files[@]}"; do
+        local basename_file
+        basename_file=$(basename "$file")
+        local file_size
+        file_size=$(stat -f%z "$file" 2>/dev/null || stat -c%s "$file" 2>/dev/null || echo "unknown")
+        echo "  - $basename_file ($file_size bytes)" >&2
+    done
+    echo >&2
+    
+    # Return the sorted array by printing it to stdout
+    printf '%s\n' "${sql_files[@]}"
+    return 0
+}
+
 main() {
     local scan_directory
     scan_directory=$(parse_arguments "$@")
@@ -85,8 +118,19 @@ main() {
     echo "Script will execute SQL files matching pattern: batch_update_*.sql"
     echo
     
-    # TODO: Implement SQL file discovery and execution
-    echo "Implementation in progress..."
+    local -a sql_files
+    local discovery_output
+    if ! discovery_output=$(discover_sql_files "$scan_directory"); then
+        exit 1
+    fi
+    
+    # Read the discovered files into array (compatible with older bash versions)
+    while IFS= read -r line; do
+        [[ -n "$line" ]] && sql_files+=("$line")
+    done <<< "$discovery_output"
+    
+    echo "Ready to process ${#sql_files[@]} file(s) in chronological order."
+    echo "Implementation of database execution in progress..."
 }
 
 if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
