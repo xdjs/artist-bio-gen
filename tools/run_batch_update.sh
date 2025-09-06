@@ -163,8 +163,7 @@ main() {
     local failed_count=0
     
     for sql_file in "${sql_files[@]}"; do
-        execute_sql_file "$sql_file" "$scan_directory"
-        if [[ $? -eq 0 ]]; then
+        if execute_sql_file "$sql_file" "$scan_directory"; then
             ((processed_count++))
         else
             ((failed_count++))
