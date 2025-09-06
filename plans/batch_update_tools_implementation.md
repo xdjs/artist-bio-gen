@@ -173,16 +173,9 @@ Create tools to generate and execute batch SQL update files from JSONL output, e
 - ✅ Document required environment variables
 - Add troubleshooting section
 
-### Task 3.2: Add Example Files and Tests
+### Task 3.2: Create Manual Acceptance Test Plan ✅
 **Subtasks**:
-- Create sample input JSONL file for testing
-- Generate example output files for reference
-- Test with both `artists` and `test_artists` modes
-- Validate handling of edge cases:
-  - Empty JSONL file
-  - All invalid entries
-  - Very large files (10k+ entries)
-  - Unicode/special characters in bio text
+- ✅ Create comprehensive manual acceptance test plan and save as `plans/MANUAL_TEST_PLAN.md`
 
 ### Task 3.3: Update Project Documentation
 **Subtasks**:
