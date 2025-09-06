@@ -116,12 +116,12 @@ Create tools to generate and execute batch SQL update files from JSONL output, e
   ```
 - ✅ Add help text and usage information
 
-### Task 2.2: Implement SQL File Discovery
+### Task 2.2: Implement SQL File Discovery ✅
 **Subtasks**:
-- Scan directory for files matching `batch_update_*.sql`
-- Sort files by timestamp (process oldest first)
-- Skip files that don't match expected naming pattern
-- Display found files before processing
+- ✅ Scan directory for files matching `batch_update_*.sql`
+- ✅ Sort files by timestamp (process oldest first)
+- ✅ Skip files that don't match expected naming pattern
+- ✅ Display found files before processing
 
 ### Task 2.3: Implement Database Connection Management
 **Subtasks**:
