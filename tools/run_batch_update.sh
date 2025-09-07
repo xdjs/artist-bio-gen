@@ -118,9 +118,9 @@ validate_database_connection() {
         return 1
     fi
     
-    # Test database connectivity without password prompt
+    # Test database connectivity with timeout to prevent hanging
     echo "Testing database connectivity..."
-    if ! psql "$DATABASE_URL" --no-password -c "SELECT 1" >/dev/null 2>&1; then
+    if ! timeout 10s psql "$DATABASE_URL" -c "SELECT 1" >/dev/null 2>&1; then
         echo "Error: Failed to connect to database" >&2
         echo "Please verify your DATABASE_URL is correct and the database is accessible" >&2
         echo "DATABASE_URL format: postgresql://user:pass@host:port/dbname" >&2
@@ -204,7 +204,7 @@ execute_sql_file() {
     local start_time
     start_time=$(date +%s)
     
-    if psql "$DATABASE_URL" --no-password -f "$sql_file"; then
+    if timeout 30s psql "$DATABASE_URL" -f "$sql_file"; then
         local end_time
         end_time=$(date +%s)
         local duration=$((end_time - start_time))
