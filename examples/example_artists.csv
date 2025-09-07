@@ -1,6 +1,18 @@
+# Example Artists CSV File
+# This file contains sample artist data for testing purposes
 artist_id,artist_name,artist_data
-c59eca41-9fb0-45e8-a0a8-cbc238cb58f8,Yani Mo,"{""x"": ""yani_mo"", ""spotify"": ""4tUlEJvr7Kib3TjGmIivVU"", ""instagram"": ""yanimo_"", ""youtubechannel"": ""UCyo_Z2hLD1NgMS_O8DQBf6Q""}"
-c2962e1c-ea21-4565-aa36-06908b3d5efd,SLIGHT,"{""spotify"": ""0TlnMWv7ZGzqskCKGgKmGI"", ""youtubechannel"": ""UCjm0eZHboFr6EFMQiPMBvTg""}"
+
+# Popular artists for testing
+c59eca41-9fb0-45e8-a0a8-cbc238cb58f8,Taylor Swift,"{""x"": ""taylorswift13"", ""spotify"": ""06HL4z0CvFAxyc27GXpf02"", ""instagram"": ""taylorswift""}"
+c2962e1c-ea21-4565-aa36-06908b3d5efd,Drake,"{""spotify"": ""3TVXtAsR1Inumwj472S9r4"", ""instagram"": ""champagnepapi""}"
+4efb14b2-ef49-429f-95f4-2f1e593e1b67,Billie Eilish,"{""x"": ""billieeilish"", ""spotify"": ""6qqNVTkY8uBg9cP3Jd8DAH"", ""instagram"": ""billieeilish""}"
+
+# Additional popular artists
+c3275538-a2cc-4782-904b-15e178789dbc,The Weeknd,"{""x"": ""theweeknd"", ""spotify"": ""1Xyo4u8uXC1ZmMpatF05PJ"", ""instagram"": ""theweeknd""}"
+c4275538-a2cc-4782-904b-15e178789dbc,BTS,"{""x"": ""BTS_twt"", ""spotify"": ""3Nrfpe0tUJi4K4DXYWgMUX"", ""instagram"": ""bts.bighitofficial""}"
+
+# Test case with empty artist_data
+c7275538-a2cc-4782-904b-15e178789dbc,Test Artist,
 4efb14b2-ef49-429f-95f4-2f1e593e1b67,KIRINJI,"{""x"": ""kirinjiofficial"", ""spotify"": ""0O1UtbTe4ca7HabaiMhYZ7"", ""instagram"": ""kirinji_official"", ""wikipedia"": ""Kirinji_(band)"", ""soundcloud"": ""kirinji-official""}"
 c7275538-a2cc-4782-904b-15e178789dbc,Barry Hudson-Taylor,"{""x"": ""bhudson_taylor"", ""spotify"": ""3MuhX7tuEdOUvsOGg7ui02"", ""instagram"": ""bhudsontaylormusic"", ""youtubechannel"": ""UCjoP7RjRUdwVPDQVUB7e-TQ""}"
 ac471f35-11ce-4d46-ae20-7bc25c6b3b76,Krimer,"{""x"": ""officialkrimer"", ""spotify"": ""19h89UGIU0cyc07cYjJ8V1"", ""instagram"": ""krimer_"", ""soundcloud"": ""officialkrimer""}"
