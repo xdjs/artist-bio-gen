@@ -104,6 +104,12 @@ out.jsonl
 output/
 results/
 
+# Batch update generated files
+tools/batch_update_*.sql
+tools/batch_update_*.csv
+tools/batch_update_skipped_*.jsonl
+tools/processed/
+
 # Temporary files
 tmp/
 

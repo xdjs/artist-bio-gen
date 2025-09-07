@@ -4,6 +4,7 @@ A modular Python package that uses the OpenAI Responses API to generate artist b
 
 ## 🚀 Features
 
+### Core Bio Generation
 - **CSV-like Input Processing**: Parse artist data from text files with support for comments and blank lines
 - **OpenAI Responses API Integration**: Use reusable prompts for consistent bio generation
 - **Comprehensive Logging**: Real-time progress tracking with visual progress bars and detailed statistics
@@ -14,6 +15,13 @@ A modular Python package that uses the OpenAI Responses API to generate artist b
 - **Verbose Logging**: Debug-level logging for troubleshooting
 - **Modular Architecture**: Clean separation of concerns with importable modules
 - **Library API**: Use as a Python package in your own applications
+
+### Batch Processing Tools
+- **Automated SQL Generation**: Convert JSONL output to PostgreSQL batch update scripts
+- **Database Batch Updates**: Execute batch updates with comprehensive error handling and progress reporting
+- **Field Validation**: UUID validation, duplicate detection, and content verification
+- **File Management**: Automatic organization of processed files with rollback capabilities
+- **Production/Test Modes**: Safe testing with separate database tables
 
 ## 📦 Package Structure
 
@@ -209,6 +217,37 @@ python3 run_artists.py --input-file artists.csv --prompt-id prompt_123 --enable-
 ```bash
 python3 run_artists.py --input-file test_artists.csv --prompt-id prompt_123 --enable-db --test-mode --verbose
 ```
+
+## 🔧 Batch Processing Tools
+
+The package includes automated tools for processing JSONL output and executing database batch updates:
+
+### Quick Start
+```bash
+# 1. Generate artist bios to JSONL
+python3 run_artists.py --input-file artists.csv --prompt-id prompt_123 --output bios.jsonl
+
+# 2. Convert JSONL to SQL batch files
+python3 tools/generate_batch_update.py --input bios.jsonl
+
+# 3. Execute database updates
+./tools/run_batch_update.sh
+```
+
+### Batch Processing Workflow
+1. **Generate**: Use the main script to create JSONL files with artist bios
+2. **Process**: Convert JSONL to validated CSV and SQL files for database import
+3. **Execute**: Run batch updates with automatic file management and error handling
+4. **Verify**: Review processed files and any skipped entries
+
+### Key Features
+- **Field Validation**: Automatic UUID format checking and duplicate detection
+- **Error Isolation**: Invalid entries are skipped and saved separately for review
+- **Atomic Operations**: Safe file handling with rollback on failures
+- **Progress Reporting**: Real-time status updates with execution timing
+- **Test Mode**: Safe testing against separate database tables
+
+For detailed documentation, see [`tools/README.md`](tools/README.md).
 
 ### Library Usage
 

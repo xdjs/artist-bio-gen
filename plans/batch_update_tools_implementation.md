@@ -165,29 +165,22 @@ Create tools to generate and execute batch SQL update files from JSONL output, e
 ## Phase 3: Integration and Documentation
 **Priority: Medium | Estimated Time: 1-2 hours**
 
-### Task 3.1: Create Documentation
+### Task 3.1: Create Documentation ✅
 **Subtasks**:
-- Add `tools/README.md` with usage instructions
-- Document workflow: generate → execute → cleanup
-- Provide example usage scenarios
-- Document required environment variables
+- ✅ Add `tools/README.md` with usage instructions
+- ✅ Document workflow: generate → execute → cleanup
+- ✅ Provide example usage scenarios
+- ✅ Document required environment variables
 - Add troubleshooting section
 
-### Task 3.2: Add Example Files and Tests
+### Task 3.2: Create Manual Acceptance Test Plan ✅
 **Subtasks**:
-- Create sample input JSONL file for testing
-- Generate example output files for reference
-- Test with both `artists` and `test_artists` modes
-- Validate handling of edge cases:
-  - Empty JSONL file
-  - All invalid entries
-  - Very large files (10k+ entries)
-  - Unicode/special characters in bio text
+- ✅ Create comprehensive manual acceptance test plan and save as `plans/BATCH_PROCESSING_MANUAL_ACCEPTANCE_TEST_PLAN.md`
 
-### Task 3.3: Update Project Documentation
+### Task 3.3: Update Project Documentation ✅
 **Subtasks**:
-- Update main `README.md` to mention batch tools
-- Add section to `AGENTS.md` about tool usage
+- ✅ Update main `README.md` to mention batch tools
+- ✅ Add section to `AGENTS.md` about tool usage
 - Update `.gitignore` for generated files:
   ```
   tools/batch_update_*.sql
