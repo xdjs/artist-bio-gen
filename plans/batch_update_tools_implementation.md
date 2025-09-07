@@ -177,10 +177,10 @@ Create tools to generate and execute batch SQL update files from JSONL output, e
 **Subtasks**:
 - ✅ Create comprehensive manual acceptance test plan and save as `plans/BATCH_PROCESSING_MANUAL_ACCEPTANCE_TEST_PLAN.md`
 
-### Task 3.3: Update Project Documentation
+### Task 3.3: Update Project Documentation ✅
 **Subtasks**:
-- Update main `README.md` to mention batch tools
-- Add section to `AGENTS.md` about tool usage
+- ✅ Update main `README.md` to mention batch tools
+- ✅ Add section to `AGENTS.md` about tool usage
 - Update `.gitignore` for generated files:
   ```
   tools/batch_update_*.sql
