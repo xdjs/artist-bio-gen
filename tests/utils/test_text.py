@@ -74,6 +74,20 @@ class TestStripTrailingCitations(unittest.TestCase):
         twice = self.strip_trailing_citations(once)
         self.assertEqual(once, twice)
 
+    def test_lower_dens_text_with_trailing_citation(self):
+        text = (
+            "Latest public updates from Lower Dens' socials point to a breakup announced December 8, 2021, with no official posts since.\n\n"
+            "To become a fan, dive into Twin-Hand Movement, Nootropics, Escape from Evil, and The Competition—the band's four-album arc that fuses indie pop, dream pop, and krautrock-like synths, all anchored by Hunter's voice.\n\n"
+            "Trivia nerd note: Lower Dens built songs through democratic in-room decisions, sprang from Baltimore's scene, and even opened for Beach House and Yo La Tengo. ([en.wikipedia.org](https://en.wikipedia.org/wiki/Lower_Dens), [lowerdens.bandcamp.com](https://lowerdens.bandcamp.com/album/the-competition?utm_source=openai))"
+        )
+        expected = (
+            "Latest public updates from Lower Dens' socials point to a breakup announced December 8, 2021, with no official posts since.\n\n"
+            "To become a fan, dive into Twin-Hand Movement, Nootropics, Escape from Evil, and The Competition—the band's four-album arc that fuses indie pop, dream pop, and krautrock-like synths, all anchored by Hunter's voice.\n\n"
+            "Trivia nerd note: Lower Dens built songs through democratic in-room decisions, sprang from Baltimore's scene, and even opened for Beach House and Yo La Tengo."
+        )
+        cleaned = self.strip_trailing_citations(text)
+        self.assertEqual(cleaned, expected)
+
 
 if __name__ == "__main__":
     unittest.main()
