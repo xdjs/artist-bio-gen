@@ -16,7 +16,6 @@ Implementation plan for adding rate limiting and quota management to the artist 
 - ✅ **Simple environment setup** - No dev/prod config differences
 - ✅ **Existing retry framework** - Can be enhanced rather than replaced
 - ✅ **Structured testing** - Follows `tests/api/`, `tests/core/` patterns
-
 ---
 
 ## Phase 1: Core Infrastructure (Days 1-2)
@@ -46,11 +45,6 @@ class QuotaMetrics:
     should_pause: bool
     pause_reason: Optional[str]
 
-@dataclass
-class ErrorClassification:
-    kind: str  # 'rate_limit', 'quota', 'server', 'network'
-    retry_after: Optional[int]
-    should_retry: bool
 ```
 
 **Acceptance Criteria**:
@@ -204,6 +198,7 @@ pause_controller.wait_if_paused()
 
 **New Configuration Fields**:
 ```python
+
 # Environment variables:
 QUOTA_MONITORING=true  # Default enabled for all environments
 QUOTA_THRESHOLD=0.8
