@@ -48,10 +48,10 @@ class QuotaMetrics:
 ```
 
 **Acceptance Criteria**:
-- [ ] Models handle all OpenAI header fields
-- [ ] Include validation for required fields
-- [ ] Add helper methods for percentage calculations
-- [ ] Include serialization support for persistence
+- [x] Models handle all OpenAI header fields
+- [x] Include validation for required fields
+- [x] Add helper methods for percentage calculations
+- [x] Include serialization support for persistence
 
 ### Task 1.2: Implement HTTP Header Parser
 **File**: `artist_bio_gen/api/quota.py` (NEW)  

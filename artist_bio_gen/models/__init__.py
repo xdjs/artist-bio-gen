@@ -10,6 +10,7 @@ from .artist import ArtistData, ParseResult
 from .api import ApiResponse
 from .database import DatabaseConfig, DatabaseResult
 from .stats import ProcessingStats
+from .quota import QuotaStatus, QuotaMetrics, ErrorClassification
 
 __all__ = [
     "ArtistData",
@@ -18,4 +19,7 @@ __all__ = [
     "DatabaseConfig",
     "DatabaseResult",
     "ProcessingStats",
+    "QuotaStatus",
+    "QuotaMetrics",
+    "ErrorClassification",
 ]
