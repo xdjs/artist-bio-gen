@@ -255,7 +255,7 @@ class QuotaMonitor:
             self.current_quota_metrics = calculate_usage_metrics(
                 self.current_quota_status,
                 self.daily_limit_requests,
-                self.requests_used_today
+                self.requests_used_today,
             )
 
             return self.current_quota_metrics
@@ -293,6 +293,79 @@ class QuotaMonitor:
         """Get current quota status (thread-safe)."""
         with self._lock:
             return self.current_quota_status
+
+    def persist_state(self, filepath: str) -> None:
+        """Persist current quota state to disk using atomic write.
+
+        Writes to a temporary file in the same directory and renames it to ensure
+        atomic replacement.
+        """
+        import json
+        import os
+        import tempfile
+
+        with self._lock:
+            state = {
+                "daily_limit_requests": self.daily_limit_requests,
+                "pause_threshold": self.pause_threshold,
+                "requests_used_today": self.requests_used_today,
+                "last_reset": self.last_reset.isoformat(),
+                "quota_status": self.current_quota_status.to_dict() if self.current_quota_status else None,
+                "quota_metrics": self.current_quota_metrics.to_dict() if self.current_quota_metrics else None,
+            }
+
+        # Perform atomic write
+        directory = os.path.dirname(filepath) or "."
+        os.makedirs(directory, exist_ok=True)
+        fd, tmp_path = tempfile.mkstemp(prefix=".quota_tmp_", dir=directory)
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                json.dump(state, f)
+            os.replace(tmp_path, filepath)
+            logger.debug(f"Persisted quota state to {filepath}")
+        except Exception as e:
+            logger.error(f"Failed to persist quota state to {filepath}: {e}")
+            # Best-effort cleanup of temp file
+            try:
+                if os.path.exists(tmp_path):
+                    os.remove(tmp_path)
+            except Exception:
+                pass
+
+    def load_state(self, filepath: str) -> bool:
+        """Load quota state from disk. Returns True if successful."""
+        import json
+        import os
+        from ..models.quota import QuotaStatus as _QS, QuotaMetrics as _QM
+
+        if not os.path.exists(filepath):
+            logger.info(f"Quota state file not found: {filepath}")
+            return False
+
+        try:
+            with open(filepath, "r", encoding="utf-8") as f:
+                data = json.load(f)
+
+            with self._lock:
+                self.daily_limit_requests = data.get("daily_limit_requests")
+                self.pause_threshold = float(data.get("pause_threshold", self.pause_threshold))
+                self.requests_used_today = int(data.get("requests_used_today", 0))
+                last_reset_str = data.get("last_reset")
+                if last_reset_str:
+                    try:
+                        self.last_reset = datetime.fromisoformat(last_reset_str)
+                    except Exception:
+                        pass
+                qs = data.get("quota_status")
+                qm = data.get("quota_metrics")
+                self.current_quota_status = _QS.from_dict(qs) if qs else None
+                self.current_quota_metrics = _QM.from_dict(qm) if qm else None
+
+            logger.debug(f"Loaded quota state from {filepath}")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to load quota state from {filepath}: {e}")
+            return False
 
 
 class PauseController:
@@ -345,6 +418,17 @@ class PauseController:
             self._resume_time = None
 
         logger.info(f"RESUMED: {reason}")
+
+    def resume_at(self, timestamp: float) -> None:
+        """Schedule an automatic resume at the given UNIX timestamp.
+
+        Does not change the current pause state; call pause() first to pause.
+        """
+        with self._lock:
+            self._resume_time = timestamp
+            if not self._pause_event.is_set():
+                resume_datetime = datetime.fromtimestamp(timestamp)
+                logger.info(f"Auto-resume scheduled at {resume_datetime}")
 
     def wait_if_paused(self, timeout: Optional[float] = None):
         """
