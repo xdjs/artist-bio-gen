@@ -1,14 +1,21 @@
 # Rate Limiting Implementation Plan
 
 ## Overview
-Detailed implementation plan for adding sophisticated rate limiting and quota management to the artist bio generation system based on OpenAI best practices and the existing codebase architecture.
+Implementation plan for adding rate limiting and quota management to the artist bio generation system. Updated based on detailed codebase analysis and technical feedback review.
 
 ## Project Context
 - **Target**: 42,888 artist bio generations
-- **Current Limits**: Tier 3 (4M TPM, 5K RPM)  
+- **Current Limits**: Tier 3 (4M TPM, 5K RPM)
 - **Timeline**: 1 week implementation + processing
 - **Priority**: Reliability and quota management over speed
 
+## Codebase Analysis Key Findings
+- ❌ **No streaming API usage** - Standard `client.responses.create()` calls only
+- ❌ **Basic rate limiting** - Simple exponential backoff in `api/utils.py`
+- ✅ **ThreadPoolExecutor concurrency** - Uses configurable `max_workers` with worker IDs
+- ✅ **Simple environment setup** - No dev/prod config differences
+- ✅ **Existing retry framework** - Can be enhanced rather than replaced
+- ✅ **Structured testing** - Follows `tests/api/`, `tests/core/` patterns
 ---
 
 ## Phase 1: Core Infrastructure (Days 1-2)
@@ -29,14 +36,15 @@ class QuotaStatus:
     reset_requests: str
     reset_tokens: str
     timestamp: datetime
-    
-@dataclass 
+
+@dataclass
 class QuotaMetrics:
     requests_used_today: int
     daily_limit: Optional[int]
     usage_percentage: float
     should_pause: bool
     pause_reason: Optional[str]
+
 ```
 
 **Acceptance Criteria**:
@@ -66,51 +74,71 @@ def should_pause_processing(quota_metrics, threshold) -> Tuple[bool, str]
 
 ### Task 1.3: Enhanced Exponential Backoff Strategy
 **File**: `artist_bio_gen/api/utils.py` (MODIFY)
-**Estimated Time**: 4 hours  
+**Estimated Time**: 4 hours
 **Dependencies**: Task 1.2
 
 **Modifications**:
-1. **Enhance `retry_with_exponential_backoff` decorator**:
-   - Add `Retry-After` header parsing
-   - Different backoff strategies per error type
-   - Add jitter to prevent thundering herd
-   - Support quota-aware retry limits
-
-2. **New functions**:
+1. **Add error classification utility**:
    ```python
-   def get_enhanced_backoff_delay(attempt, error_type, retry_after=None)
-   def should_retry_error(error, attempt, error_type)
-   def extract_retry_after_header(response_headers)
+   def classify_error(exc) -> ErrorClassification:
+       """Classify error using SDK types, status_code, and body error code"""
+       # Use HTTP status + error code vs string matching
+   ```
+
+2. **Enhance `retry_with_exponential_backoff` decorator**:
+   - Extract `Retry-After` from exception/HTTP response for 429/503
+   - Different backoff strategies per error type
+   - Add 10% jitter consistently
+   - Use single backoff helper function
+
+3. **New backoff helper**:
+   ```python
+   def compute_backoff(attempt, kind, retry_after, base, cap, jitter) -> float:
+       """Single function used by retry decorator with consistent caps and jitter"""
    ```
 
 **Current vs Enhanced Backoff**:
 | Error Type | Current | Enhanced |
 |------------|---------|----------|
-| Rate Limit | 0.5s → 4s | 60s → 300s + jitter |
-| Quota | 0.5s → 4s | 300s → 3600s + jitter |  
-| Server | 0.5s → 4s | 0.5s → 4s (unchanged) |
+| Rate Limit (429) | 0.5s → 4s | Use Retry-After or 60s → 300s + 10% jitter |
+| Quota (insufficient_quota) | 0.5s → 4s | 300s → 3600s + 10% jitter |
+| Server (5xx) | 0.5s → 4s | 0.5s → 4s (unchanged) |
+| Network | 0.5s → 4s | 0.5s → 4s (unchanged) |
 
 **Acceptance Criteria**:
-- [ ] Respect `Retry-After` headers when present
-- [ ] Use appropriate delays for each error type
-- [ ] Add 10% jitter to prevent synchronized retries
-- [ ] Maintain backward compatibility
-- [ ] Add comprehensive unit tests
+- [ ] Capture `Retry-After` from exception/HTTP response for 429/503
+- [ ] Map SDK exceptions and error codes precisely (429 rate limiting vs billing quota)
+- [ ] Use HTTP status + error code rather than string matching
+- [ ] Apply 10% jitter consistently
+- [ ] Maintain backward compatibility with existing retry logic
+- [ ] Add comprehensive unit tests with different SDK exception types
 
 ### Task 1.4: Quota Monitor Class Implementation
 **File**: `artist_bio_gen/api/quota.py` (EXTEND)
-**Estimated Time**: 3 hours
+**Estimated Time**: 4 hours
 **Dependencies**: Tasks 1.1, 1.2
 
 ```python
 class QuotaMonitor:
-    def __init__(self, daily_limit_requests=None, pause_threshold=0.8)
-    def update_from_response(self, response) -> QuotaMetrics
+    def __init__(self, daily_limit_requests=None, pause_threshold=0.8):
+        self._lock = threading.Lock()  # Thread safety for concurrent workers
+
+    def update_from_response(self, headers, usage_stats) -> QuotaMetrics
     def should_pause(self) -> Tuple[bool, str]
     def can_resume(self) -> bool
     def get_current_metrics(self) -> QuotaMetrics
-    def persist_state(self, filepath: str)
+    def persist_state(self, filepath: str)  # Atomic writes (temp + rename)
     def load_state(self, filepath: str)
+
+class PauseController:
+    def __init__(self):
+        self._pause_event = threading.Event()
+        self._pause_event.set()  # Start unpaused
+
+    def pause(self, reason: str):
+    def resume_at(self, timestamp: float):
+    def wait_if_paused(self):
+    def is_paused(self) -> bool
 ```
 
 **Acceptance Criteria**:
@@ -125,24 +153,32 @@ class QuotaMonitor:
 
 ## Phase 2: Integration with Existing System (Days 2-3)
 
-### Task 2.1: Integrate Header Parsing with API Calls
+### Task 2.1: Integrate Raw Response Access for Header Parsing
 **File**: `artist_bio_gen/api/operations.py` (MODIFY)
-**Estimated Time**: 2 hours
+**Estimated Time**: 3 hours
 **Dependencies**: Tasks 1.1-1.4
 
+**Critical Change**: Use `with_raw_response` to access headers
+
 **Integration Points**:
-- **Line ~77**: After `client.responses.create()` call
+- **Line ~77**: Replace `client.responses.create()` with raw response wrapper
 - **Add quota monitoring**: Extract headers and update quota state
 - **Add pause checks**: Check quota before making API calls
 
 ```python
 # Modification in call_openai_api():
-response = client.responses.create(...)
-quota_metrics = quota_monitor.update_from_response(response)
+# OLD: response = client.responses.create(prompt=prompt_config)
+# NEW:
+raw_response = client.responses.with_raw_response.create(prompt=prompt_config)
+response = raw_response.parse()
+headers = raw_response.headers
 
-if quota_monitor.should_pause()[0]:
-    # Handle pause logic
-    pass
+# Extract usage from response body (not just headers)
+usage_stats = getattr(response, 'usage', None)
+quota_metrics = quota_monitor.update_from_response(headers, usage_stats)
+
+# Check pause controller before continuing
+pause_controller.wait_if_paused()
 ```
 
 **Acceptance Criteria**:
@@ -152,61 +188,67 @@ if quota_monitor.should_pause()[0]:
 - [ ] Maintain existing functionality
 - [ ] Handle errors gracefully
 
-### Task 2.2: Add Configuration Parameters  
-**Files**: 
-- `artist_bio_gen/config/env.py` (MODIFY)
-- `artist_bio_gen/cli/parser.py` (MODIFY)
-- `artist_bio_gen/constants.py` (MODIFY)
+### Task 2.2: Add Configuration Parameters
+**Files**:
+- Environment variables and CLI parameters
+- Update `.env.example` with new variables
 
 **Estimated Time**: 2 hours
 **Dependencies**: None
 
 **New Configuration Fields**:
 ```python
-# env.py additions:
-quota_pause_threshold: float = 0.8
-quota_monitoring_enabled: bool = True
-quota_log_interval: int = 100
-daily_request_limit: Optional[int] = None
-pause_duration_hours: int = 24
+
+# Environment variables:
+QUOTA_MONITORING=true  # Default enabled for all environments
+QUOTA_THRESHOLD=0.8
+DAILY_REQUEST_LIMIT=null  # Optional daily budget
+PAUSE_DURATION_HOURS=24
+QUOTA_LOG_INTERVAL=100
 
 # CLI parameters:
 --quota-threshold: Pause threshold (default: 0.8)
---quota-monitoring: Enable/disable monitoring
---daily-limit: Set daily request limit
---pause-duration: Hours to pause when quota hit
+--quota-monitoring: Enable/disable monitoring (default: true)
+--daily-limit: Set daily request limit (optional)
+--pause-duration: Hours to pause when quota hit (default: 24)
 ```
 
 **Acceptance Criteria**:
-- [ ] All quota parameters configurable via CLI
-- [ ] Environment variable support
-- [ ] Validation of parameter ranges
+- [ ] All quota parameters configurable via CLI and environment variables
+- [ ] Default monitoring enabled (no dev/prod differences)
+- [ ] Validation ranges: threshold 0.1-1.0, pause_duration 1-72 hours
+- [ ] Update `.env.example` with documentation
 - [ ] Backward compatibility maintained
 - [ ] Help text for all new parameters
 
 ### Task 2.3: Implement Pause/Resume Logic in Processor
-**File**: `artist_bio_gen/core/processor.py` (MODIFY)  
-**Estimated Time**: 4 hours
+**File**: `artist_bio_gen/core/processor.py` (MODIFY)
+**Estimated Time**: 5 hours
 **Dependencies**: Tasks 1.4, 2.1, 2.2
 
 **Integration Strategy**:
-1. **Add quota monitoring to processing loop** (around line 271)
-2. **Implement pause detection** in `as_completed()` loop  
-3. **Add resume conditions** and timing logic
-4. **Preserve worker state** during pauses
+1. **Add pause controller to ThreadPoolExecutor** (around line where executor is created)
+2. **Gate task submission** with pause event
+3. **Let in-flight tasks finish** during pause
+4. **Use computed resume time** from headers vs fixed 24h
 
 ```python
 # Key modifications in process_artists_concurrent():
 quota_monitor = QuotaMonitor(config.daily_request_limit, config.quota_pause_threshold)
+pause_controller = PauseController()
 
-# In the processing loop:
-if quota_monitor.should_pause()[0]:
-    # Graceful pause implementation
-    logger.warning(f"PAUSING: {reason}")
-    # Wait for resume conditions
-    while not quota_monitor.can_resume():
-        time.sleep(300)  # Check every 5 minutes
-    logger.info("RESUMING: Processing continue")
+with ThreadPoolExecutor(max_workers=max_workers) as executor:
+    for i, artist in enumerate(artists):
+        # Gate new task submission
+        pause_controller.wait_if_paused()
+
+        worker_id = f"W{i % max_workers + 1:02d}"
+        future = executor.submit(
+            call_openai_api_with_pause_check,
+            client, artist, prompt_id, version, worker_id,
+            db_pool, skip_existing, test_mode, pause_controller
+        )
+        # Store future mapping...
 ```
 
 **Acceptance Criteria**:
@@ -221,31 +263,31 @@ if quota_monitor.should_pause()[0]:
 
 ## Phase 3: Advanced Features & Optimization (Days 3-4)
 
-### Task 3.1: Adaptive Concurrency Management
+### Task 3.1: Adaptive Concurrency Management (OPTIONAL)
 **File**: `artist_bio_gen/core/processor.py` (MODIFY)
-**Estimated Time**: 3 hours  
+**Estimated Time**: 3 hours
 **Dependencies**: Task 2.3
+**Status**: Ship behind feature flag, default OFF
 
 ```python
 class AdaptiveConcurrencyManager:
-    def __init__(self, initial_workers=4, max_workers=16)
+    def __init__(self, initial_workers=4, max_workers=16, enabled=False):
+        self.enabled = enabled  # Default disabled for stability
+
     def adjust_concurrency(self, success_rate, quota_usage)
     def get_recommended_workers(self, remaining_items, time_remaining)
     def should_scale_down(self, error_rate) -> bool
     def should_scale_up(self, success_rate, quota_headroom) -> bool
 ```
 
-**Scaling Logic**:
-- **Scale down** if error rate > 20% or quota usage > 90%
-- **Scale up** if success rate > 95% and quota usage < 50%
-- **Never exceed** safe concurrency limits
+**Implementation Note**:
+Feedback suggests deferring this complexity. Focus on stable core implementation first.
 
 **Acceptance Criteria**:
-- [ ] Dynamic worker adjustment based on performance
-- [ ] Respect quota constraints in scaling decisions
-- [ ] Configurable scaling parameters
-- [ ] Smooth transitions (no abrupt changes)
-- [ ] Comprehensive logging of scaling decisions
+- [ ] Behind feature flag (ADAPTIVE_CONCURRENCY_ENABLED=false)
+- [ ] Conservative default behavior when disabled
+- [ ] Comprehensive logging when enabled
+- [ ] Consider deferring until after initial deployment
 
 ### Task 3.2: Priority Queue Enhancement
 **File**: `artist_bio_gen/core/processor.py` (MODIFY)
@@ -265,61 +307,64 @@ class AdaptiveConcurrencyManager:
 
 ### Task 3.3: Enhanced Monitoring & Alerting
 **File**: `artist_bio_gen/utils/logging.py` (MODIFY)
-**Estimated Time**: 2 hours  
+**Estimated Time**: 2 hours
 **Dependencies**: Task 1.4
 
 **New Logging Functions**:
 ```python
 def log_quota_metrics(quota_metrics: QuotaMetrics, worker_id: str)
-def log_pause_event(reason: str, resume_time: datetime)  
+def log_pause_event(reason: str, resume_time: datetime)
 def log_resume_event(duration_paused: int, quota_status: QuotaStatus)
-def log_concurrency_change(old_workers: int, new_workers: int, reason: str)
+def log_rate_limit_event(error_type: str, retry_after: int, worker_id: str)
 ```
 
-**Alert Thresholds**:
+**Alert Thresholds & Rate-limited Logging**:
 - **Warning**: 60% quota usage
-- **Critical**: 80% quota usage  
+- **Critical**: 80% quota usage
 - **Emergency**: 95% quota usage
+- **Rate-limited**: Log every N requests or threshold crossings to prevent spam
 
 **Acceptance Criteria**:
 - [ ] Structured JSON logging for all quota events
-- [ ] Configurable alert thresholds
+- [ ] Rate-limited logging to prevent spam under load
 - [ ] Clear event categorization
-- [ ] Machine-readable log format
+- [ ] Fits existing logging utilities pattern
 
 ---
 
 ## Phase 4: Testing & Validation (Days 4-5)
 
 ### Task 4.1: Unit Tests for Quota Components
-**Files**: 
-- `tests/test_quota_monitor.py` (NEW)
-- `tests/test_enhanced_backoff.py` (NEW) 
-- `tests/test_header_parsing.py` (NEW)
+**Files** (Following existing test structure):
+- `tests/api/test_quota_headers.py` (NEW)
+- `tests/api/test_enhanced_backoff.py` (NEW)
+- `tests/models/test_quota_models.py` (NEW)
+- `tests/core/test_pause_resume.py` (NEW)
 
 **Estimated Time**: 4 hours
 **Dependencies**: Phases 1-3
 
 **Test Coverage**:
-- [ ] Header parsing with various response formats
-- [ ] Quota calculations and thresholds  
-- [ ] Backoff delay calculations
-- [ ] Error handling for malformed headers
-- [ ] State persistence and recovery
-- [ ] Thread safety of quota monitor
+- [ ] Mock `with_raw_response` objects exposing `headers` and `parse().usage`
+- [ ] Header parsing (missing/zero/units), handle None gracefully
+- [ ] Backoff calculations with different error types
+- [ ] Thread safety under concurrency
+- [ ] State persistence with atomic writes
+- [ ] All tests offline with mocked SDK responses
 
 ### Task 4.2: Integration Tests with Mock API
-**File**: `tests/test_rate_limiting_integration.py` (NEW)
+**File**: `tests/integration/test_rate_limiting_integration.py` (NEW)
 **Estimated Time**: 3 hours
 **Dependencies**: Task 4.1
 
 **Test Scenarios**:
-- [ ] Quota threshold triggering pause
-- [ ] Resume after quota reset
-- [ ] Different error types and retry strategies  
-- [ ] Concurrent worker behavior during pauses
+- [ ] Quota threshold triggering pause with PauseController
+- [ ] Resume from computed header times vs fixed 24h
+- [ ] Different SDK exception types and retry strategies
+- [ ] ThreadPoolExecutor behavior during pause events
 - [ ] Configuration parameter validation
 - [ ] Progress preservation during pauses
+- [ ] Non-streaming response path coverage (no streaming in codebase)
 
 ### Task 4.3: Small Batch Testing (100 Artists)
 **Estimated Time**: 2 hours
@@ -386,12 +431,13 @@ def log_concurrency_change(old_workers: int, new_workers: int, reason: str)
 | Day | Phase | Tasks | Hours | Deliverables |
 |-----|-------|-------|-------|--------------|
 | 1 | Phase 1 | Tasks 1.1-1.2 | 5h | Models + Header Parser |
-| 2 | Phase 1-2 | Tasks 1.3-1.4, 2.1 | 9h | Enhanced Backoff + Integration |
-| 3 | Phase 2 | Tasks 2.2-2.3 | 6h | Configuration + Pause/Resume |
-| 4 | Phase 3 | Tasks 3.1-3.3 | 7h | Advanced Features |
+| 2 | Phase 1-2 | Tasks 1.3-1.4, 2.1 | 10h | Enhanced Backoff + Raw Response Integration |
+| 3 | Phase 2 | Tasks 2.2-2.3 | 7h | Configuration + Pause/Resume with Events |
+| 4 | Phase 3 | Tasks 3.2-3.3 | 4h | Core Features (Skip adaptive concurrency) |
 | 5 | Phase 4-5 | Tasks 4.1-5.3 | 8h | Testing + Documentation |
 
-**Total Estimated Time**: 35 hours (7 hours/day for 5 days)
+**Total Estimated Time**: 34 hours (6.8 hours/day for 5 days)
+**Note**: Adaptive concurrency (Task 3.1) deferred per feedback recommendation
 
 ### Week 2: Production Processing
 - **Day 6**: Final testing and deployment
@@ -404,27 +450,27 @@ def log_concurrency_change(old_workers: int, new_workers: int, reason: str)
 
 ### High Priority Risks
 
-#### Risk: Implementation Complexity Underestimated
-- **Mitigation**: Implement core quota monitoring first, advanced features second
-- **Contingency**: Skip adaptive concurrency if timeline tight
+#### Risk: Thread Safety Issues with QuotaMonitor
+- **Mitigation**: Explicit `threading.Lock` usage, comprehensive concurrency tests
+- **Contingency**: Process-level coordination if thread-level fails
 
-#### Risk: Quota Threshold Miscalculation  
-- **Mitigation**: Start with conservative 60% threshold, adjust based on testing
-- **Contingency**: Manual monitoring during initial production runs
+#### Risk: SDK Raw Response Integration Complexity
+- **Mitigation**: Focus on `with_raw_response` pattern, thorough testing
+- **Contingency**: Fallback to existing retry mechanism without header parsing
 
-#### Risk: Performance Regression
-- **Mitigation**: Comprehensive testing with performance benchmarks
-- **Contingency**: Feature flags to disable quota monitoring if needed
+#### Risk: Pause Mechanism Blocking Workers
+- **Mitigation**: Use `threading.Event` for gating, let in-flight tasks complete
+- **Contingency**: Manual pause detection if automatic fails
 
 ### Medium Priority Risks
 
-#### Risk: Configuration Complexity
-- **Mitigation**: Provide sensible defaults, comprehensive documentation
-- **Contingency**: Environment-specific configuration templates
+#### Risk: Performance Regression from Header Parsing
+- **Mitigation**: Benchmark with/without quota monitoring
+- **Contingency**: Feature flag to disable if performance impact detected
 
-#### Risk: Thread Safety Issues
-- **Mitigation**: Use thread-safe data structures, comprehensive unit tests
-- **Contingency**: Fallback to process-level coordination if needed
+#### Risk: Header Format Changes by OpenAI
+- **Mitigation**: Robust parsing with graceful fallbacks for missing headers
+- **Contingency**: Default delay strategies when headers unavailable
 
 ---
 
@@ -455,24 +501,25 @@ def log_concurrency_change(old_workers: int, new_workers: int, reason: str)
 ## File Modification Summary
 
 ### New Files (7)
-1. `artist_bio_gen/models/quota.py` - Quota data models
-2. `artist_bio_gen/api/quota.py` - Quota monitoring logic  
-3. `tests/test_quota_monitor.py` - Unit tests
-4. `tests/test_enhanced_backoff.py` - Backoff tests
-5. `tests/test_header_parsing.py` - Parser tests
-6. `tests/test_rate_limiting_integration.py` - Integration tests
-7. `docs/MONITORING.md` - Monitoring documentation
+1. `artist_bio_gen/models/quota.py` - Quota data models with thread safety
+2. `artist_bio_gen/api/quota.py` - Quota monitoring and pause controller
+3. `tests/api/test_quota_headers.py` - Header parsing tests
+4. `tests/api/test_enhanced_backoff.py` - Backoff strategy tests
+5. `tests/models/test_quota_models.py` - Model tests
+6. `tests/core/test_pause_resume.py` - Pause/resume mechanism tests
+7. `tests/integration/test_rate_limiting_integration.py` - Integration tests
 
-### Modified Files (7)
-1. `artist_bio_gen/api/utils.py` - Enhanced backoff logic
-2. `artist_bio_gen/api/operations.py` - Header parsing integration
-3. `artist_bio_gen/core/processor.py` - Pause/resume + concurrency  
-4. `artist_bio_gen/config/env.py` - New configuration fields
-5. `artist_bio_gen/cli/parser.py` - New CLI parameters
-6. `artist_bio_gen/constants.py` - Quota-related constants
-7. `artist_bio_gen/utils/logging.py` - Enhanced logging
+### Modified Files (4)
+1. `artist_bio_gen/api/utils.py` - Enhanced backoff with error classification
+2. `artist_bio_gen/api/operations.py` - Raw response integration for headers
+3. `artist_bio_gen/core/processor.py` - PauseController integration with ThreadPoolExecutor
+4. `artist_bio_gen/utils/logging.py` - Rate-limited quota logging
 
-**Total**: 14 files (7 new, 7 modified)
+### Configuration Files
+- `.env.example` - Updated with quota configuration variables
+- Documentation updates as needed
+
+**Total**: 11 core files (7 new, 4 modified) + configuration updates
 
 ---
 
@@ -480,13 +527,14 @@ def log_concurrency_change(old_workers: int, new_workers: int, reason: str)
 
 ### External Dependencies
 - No new external packages required
-- All functionality using existing dependencies (requests, threading, etc.)
+- Uses existing `threading.Lock`, `threading.Event` for thread safety
+- OpenAI SDK `with_raw_response` method (existing capability)
 
-### Internal Dependencies  
-- Existing retry mechanism (`api/utils.py`)
-- Worker management system (`core/processor.py`)
-- Configuration system (`config/env.py`)
-- Logging infrastructure (`utils/logging.py`)
+### Internal Dependencies
+- Existing retry mechanism (`api/utils.py`) - enhanced, not replaced
+- ThreadPoolExecutor system (`core/processor.py`) - integrated with pause events
+- Environment variable configuration - extended
+- Logging infrastructure (`utils/logging.py`) - extended
 
 ### Environment Requirements
 - Python 3.8+ (existing requirement)
