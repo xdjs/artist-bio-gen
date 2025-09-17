@@ -306,7 +306,10 @@ class PauseController:
         self._pause_event.set()  # Start unpaused
         self._pause_reason: Optional[str] = None
         self._resume_time: Optional[float] = None
-        self._lock = threading.Lock()
+        # Use a re-entrant lock since wait_if_paused may trigger resume() while
+        # holding the lock, which also acquires the same lock. A standard Lock
+        # would deadlock in that scenario when auto-resume fires.
+        self._lock = threading.RLock()
 
         logger.debug("PauseController initialized (unpaused)")
 
