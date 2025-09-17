@@ -149,12 +149,14 @@ def compute_backoff(
     - For server/network: base 0.5s, cap 4s
     """
     # Determine defaults by kind if not specified
+    using_retry_after = False
+
     if kind == "rate_limit":
         base = 60.0 if base is None else base
         cap = 300.0 if cap is None else cap
-        # If Retry-After present on early attempts, use it directly
-        if retry_after and attempt == 0:
+        if retry_after is not None:
             delay = float(retry_after)
+            using_retry_after = True
         else:
             delay = min(base * (2**attempt), cap)
     elif kind == "quota":
@@ -164,9 +166,16 @@ def compute_backoff(
     else:  # server or network
         base = 0.5 if base is None else base
         cap = 4.0 if cap is None else cap
-        delay = min(base * (2**attempt), cap)
+        if retry_after is not None:
+            delay = float(retry_after)
+            using_retry_after = True
+        else:
+            delay = min(base * (2**attempt), cap)
 
     # Apply jitter: +/- jitter% using random in [0,1)
+    if using_retry_after:
+        return max(0.1, float(delay))
+
     r = random.random()
     factor = 1.0 + jitter * (2 * r - 1)
     jittered = max(0.1, delay * factor)

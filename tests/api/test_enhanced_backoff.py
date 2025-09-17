@@ -81,23 +81,30 @@ class EnhancedBackoffTests(unittest.TestCase):
         for got, exp in zip(delays, expected):
             self.assertAlmostEqual(got, exp, places=6)
 
+    def test_compute_backoff_server_honors_retry_after(self):
+        delay = compute_backoff(2, kind="server", retry_after=42)
+        self.assertAlmostEqual(delay, 42.0, places=6)
+
     def test_retry_decorator_respects_rate_limit_backoff(self):
         # Function raises rate limit twice, then succeeds
         state = {"count": 0}
 
         @retry_with_exponential_backoff(max_retries=5)
         def flaky_fn():
-            if state["count"] < 2:
+            if state["count"] == 0:
                 state["count"] += 1
                 raise DummyHTTPError(status=429, headers={"retry-after": "5"})
+            if state["count"] == 1:
+                state["count"] += 1
+                raise DummyHTTPError(status=429, headers={"Retry-After": "7"})
             return "ok"
 
         result = flaky_fn()
         self.assertEqual(result, "ok")
-        # With deterministic jitter, first delay uses retry-after 5, second uses 120 (base 60 x 2)
+        # With deterministic jitter, each attempt uses the provided Retry-After header
         self.assertGreaterEqual(len(self.sleeps), 2)
         self.assertAlmostEqual(self.sleeps[0], 5.0, places=6)
-        self.assertAlmostEqual(self.sleeps[1], 120.0, places=6)
+        self.assertAlmostEqual(self.sleeps[1], 7.0, places=6)
 
 
 if __name__ == "__main__":
