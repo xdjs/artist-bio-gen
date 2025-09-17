@@ -84,16 +84,35 @@ def call_openai_api(
         response = None
         headers = {}
         usage_stats = None
+        fallback_reason: Optional[str] = None
+
         try:
-            raw = client.responses.with_raw_response.create(prompt=prompt_config)
-            # Some SDKs return a RawResponse with .headers and .parse()
-            headers = getattr(raw, "headers", {}) or {}
-            parsed = raw.parse()
-            response = parsed
-            # Extract usage if present
-            usage_stats = getattr(parsed, "usage", None)
-        except Exception:
-            # Fallback to standard call if raw response path is unavailable
+            with_raw_response = client.responses.with_raw_response
+        except AttributeError as attr_err:
+            with_raw_response = None
+            fallback_reason = f"with_raw_response attr missing: {attr_err}"
+
+        if with_raw_response is not None:
+            try:
+                raw = with_raw_response.create(prompt=prompt_config)
+            except (AttributeError, NotImplementedError) as raw_err:
+                fallback_reason = f"with_raw_response.create unavailable: {raw_err}"
+            else:
+                headers = getattr(raw, "headers", {}) or {}
+                try:
+                    parsed = raw.parse()
+                except (AttributeError, NotImplementedError) as parse_err:
+                    fallback_reason = f"raw.parse unsupported: {parse_err}"
+                else:
+                    response = parsed
+                    # Extract usage if present
+                    usage_stats = getattr(parsed, "usage", None)
+
+        if response is None:
+            if fallback_reason is not None:
+                logger.debug(
+                    f"[{worker_id}] Raw response unavailable, falling back: {fallback_reason}"
+                )
             response = client.responses.create(prompt=prompt_config)
             headers = {}
             usage_stats = getattr(response, "usage", None)
