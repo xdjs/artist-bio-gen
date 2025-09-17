@@ -106,12 +106,12 @@ def should_pause_processing(quota_metrics, threshold) -> Tuple[bool, str]
 | Network | 0.5s → 4s | 0.5s → 4s (unchanged) |
 
 **Acceptance Criteria**:
-- [ ] Capture `Retry-After` from exception/HTTP response for 429/503
-- [ ] Map SDK exceptions and error codes precisely (429 rate limiting vs billing quota)
-- [ ] Use HTTP status + error code rather than string matching
-- [ ] Apply 10% jitter consistently
-- [ ] Maintain backward compatibility with existing retry logic
-- [ ] Add comprehensive unit tests with different SDK exception types
+- [x] Capture `Retry-After` from exception/HTTP response for 429/503
+- [x] Map SDK exceptions and error codes precisely (429 rate limiting vs billing quota)
+- [x] Use HTTP status + error code rather than string matching
+- [x] Apply 10% jitter consistently
+- [x] Maintain backward compatibility with existing retry logic
+- [x] Add comprehensive unit tests with different SDK exception types
 
 ### Task 1.4: Quota Monitor Class Implementation
 **File**: `artist_bio_gen/api/quota.py` (EXTEND)
