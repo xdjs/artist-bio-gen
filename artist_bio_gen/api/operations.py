@@ -14,6 +14,7 @@ from ..utils import strip_trailing_citations
 from ..utils.logging import log_transaction_success, log_transaction_failure
 from ..database import update_artist_bio, get_db_connection, release_db_connection
 from .utils import retry_with_exponential_backoff
+from .quota import QuotaMonitor, PauseController
 
 try:
     from openai import OpenAI
@@ -35,6 +36,8 @@ def call_openai_api(
     db_pool: Optional["ConnectionPool"] = None,
     skip_existing: bool = False,
     test_mode: bool = False,
+    quota_monitor: Optional[QuotaMonitor] = None,
+    pause_controller: Optional[PauseController] = None,
 ) -> Tuple[ApiResponse, float]:
     """
     Make an API call to OpenAI Responses API for a single artist and optionally update database.
@@ -73,8 +76,27 @@ def call_openai_api(
 
         logger.debug(f"[{worker_id}] Calling API for artist: {artist.name}")
 
-        # Make the API call
-        response = client.responses.create(prompt=prompt_config)
+        # Honor pause controller if provided (gate API calls)
+        if pause_controller is not None:
+            pause_controller.wait_if_paused()
+
+        # Make the API call with raw response for headers when available
+        response = None
+        headers = {}
+        usage_stats = None
+        try:
+            raw = client.responses.with_raw_response.create(prompt=prompt_config)
+            # Some SDKs return a RawResponse with .headers and .parse()
+            headers = getattr(raw, "headers", {}) or {}
+            parsed = raw.parse()
+            response = parsed
+            # Extract usage if present
+            usage_stats = getattr(parsed, "usage", None)
+        except Exception:
+            # Fallback to standard call if raw response path is unavailable
+            response = client.responses.create(prompt=prompt_config)
+            headers = {}
+            usage_stats = getattr(response, "usage", None)
 
         # Extract and clean response text
         raw_text = response.output_text
@@ -86,6 +108,17 @@ def call_openai_api(
         response_text = cleaned_text
         response_id = response.id
         created = int(response.created_at)
+
+        # Update quota monitor if provided
+        if quota_monitor is not None:
+            try:
+                metrics = quota_monitor.update_from_response(headers, usage_stats)
+                logger.debug(
+                    f"[{worker_id}] Quota metrics: used_today={metrics.requests_used_today}, "
+                    f"usage={metrics.usage_percentage:.1f}% pause={metrics.should_pause}"
+                )
+            except Exception as qm_err:
+                logger.warning(f"[{worker_id}] Failed to update quota monitor: {qm_err}")
 
         # Calculate timing
         end_time = time.time()
