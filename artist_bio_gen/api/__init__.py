@@ -20,6 +20,14 @@ from .utils import (
     retry_with_exponential_backoff,
 )
 
+from .quota import (
+    parse_rate_limit_headers,
+    calculate_usage_metrics,
+    should_pause_processing,
+    QuotaMonitor,
+    PauseController,
+)
+
 __all__ = [
     # Client management
     "create_openai_client",
@@ -29,4 +37,10 @@ __all__ = [
     "should_retry_error",
     "calculate_retry_delay",
     "retry_with_exponential_backoff",
+    # Quota management
+    "parse_rate_limit_headers",
+    "calculate_usage_metrics",
+    "should_pause_processing",
+    "QuotaMonitor",
+    "PauseController",
 ]
