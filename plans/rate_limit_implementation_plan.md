@@ -214,12 +214,12 @@ QUOTA_LOG_INTERVAL=100
 ```
 
 **Acceptance Criteria**:
-- [ ] All quota parameters configurable via CLI and environment variables
-- [ ] Default monitoring enabled (no dev/prod differences)
-- [ ] Validation ranges: threshold 0.1-1.0, pause_duration 1-72 hours
-- [ ] Update `.env.example` with documentation
-- [ ] Backward compatibility maintained
-- [ ] Help text for all new parameters
+- [x] All quota parameters configurable via CLI and environment variables
+- [x] Default monitoring enabled (no dev/prod differences)
+- [x] Validation ranges: threshold 0.1-1.0, pause_duration 1-72 hours
+- [x] Update `.env.example` with documentation
+- [x] Backward compatibility maintained
+- [x] Help text for all new parameters
 
 ### Task 2.3: Implement Pause/Resume Logic in Processor
 **File**: `artist_bio_gen/core/processor.py` (MODIFY)

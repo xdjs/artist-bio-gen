@@ -78,6 +78,42 @@ Examples:
         help="Resume processing by skipping artists already present in output file"
     )
 
+    # Quota monitoring and control flags (Task 2.2)
+    parser.add_argument(
+        "--quota-threshold",
+        type=float,
+        default=None,
+        help="Pause threshold as a decimal between 0.1 and 1.0 (default: 0.8)",
+    )
+
+    parser.add_argument(
+        "--quota-monitoring",
+        choices=["true", "false"],
+        default=None,
+        help="Enable or disable quota monitoring (default: true)",
+    )
+
+    parser.add_argument(
+        "--daily-limit",
+        type=int,
+        default=None,
+        help="Optional daily request limit used for pausing (no default)",
+    )
+
+    parser.add_argument(
+        "--pause-duration",
+        type=int,
+        default=None,
+        help="Hours to pause when quota is hit (1-72, default: 24)",
+    )
+
+    parser.add_argument(
+        "--quota-log-interval",
+        type=int,
+        default=None,
+        help="Log quota metrics every N requests to reduce noise (default: 100)",
+    )
+
 
     # Environment variable overrides
     parser.add_argument(
