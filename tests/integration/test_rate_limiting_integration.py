@@ -143,7 +143,18 @@ class TestQuotaThresholdTriggering(unittest.TestCase):
 
             # Test with invalid threshold (should be clamped or raise error)
             with patch('artist_bio_gen.core.processor.call_openai_api') as mock_api:
-                mock_api.return_value = (Mock(), 0.1)
+                # Create a proper ApiResponse instead of bare Mock
+                mock_response = ApiResponse(
+                    artist_id=1,
+                    artist_name="Test",
+                    artist_data="data",
+                    response_text="Test bio",
+                    response_id="test_id",
+                    created=int(time.time()),
+                    db_status="null",
+                    error=None
+                )
+                mock_api.return_value = (mock_response, 0.1)
 
                 # Test boundary values
                 for threshold in [0.1, 0.5, 0.9, 1.0]:
