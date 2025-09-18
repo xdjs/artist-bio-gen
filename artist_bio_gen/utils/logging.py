@@ -7,6 +7,7 @@ to ensure consistent logging behavior across the application.
 
 import json
 import logging
+import threading
 import time
 from datetime import datetime
 from typing import Optional
@@ -121,6 +122,7 @@ def log_transaction_failure(
 _last_quota_log_time = 0.0
 _last_quota_threshold = 0.0
 _quota_log_interval = 100  # Log every N requests by default
+_quota_state_lock = threading.Lock()
 
 
 def log_quota_metrics(quota_metrics, worker_id: str, logger: Optional[logging.Logger] = None):
@@ -158,11 +160,16 @@ def log_quota_metrics(quota_metrics, worker_id: str, logger: Optional[logging.Lo
     # 1. Alert level changed (threshold crossing)
     # 2. Emergency level (always log)
     # 3. Time interval passed since last log
-    should_log = (
-        abs(usage_percentage - _last_quota_threshold) >= 10.0 or  # 10% threshold change
-        alert_level == "emergency" or
-        current_time - _last_quota_log_time >= _quota_log_interval
-    )
+    with _quota_state_lock:
+        should_log = (
+            abs(usage_percentage - _last_quota_threshold) >= 10.0 or  # 10% threshold change
+            alert_level == "emergency" or
+            current_time - _last_quota_log_time >= _quota_log_interval
+        )
+
+        if should_log:
+            _last_quota_log_time = current_time
+            _last_quota_threshold = usage_percentage
 
     if should_log:
         # Create structured quota metrics record
@@ -187,9 +194,6 @@ def log_quota_metrics(quota_metrics, worker_id: str, logger: Optional[logging.Lo
             logger.warning(f"QUOTA_WARNING: {json.dumps(quota_record, ensure_ascii=False)}")
         else:
             logger.info(f"QUOTA_METRICS: {json.dumps(quota_record, ensure_ascii=False)}")
-
-        _last_quota_log_time = current_time
-        _last_quota_threshold = usage_percentage
 
 
 def log_pause_event(reason: str, resume_time: Optional[datetime] = None, logger: Optional[logging.Logger] = None):
@@ -290,4 +294,5 @@ def set_quota_log_interval(interval_seconds: int):
         interval_seconds: Minimum seconds between quota metric logs
     """
     global _quota_log_interval
-    _quota_log_interval = interval_seconds
+    with _quota_state_lock:
+        _quota_log_interval = interval_seconds
