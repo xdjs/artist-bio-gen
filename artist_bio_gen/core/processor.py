@@ -13,6 +13,7 @@ from typing import List, Optional, Tuple
 
 from ..models import ArtistData, ApiResponse, ProcessingStats
 from ..api import call_openai_api
+from ..api.quota import QuotaMonitor, PauseController
 from ..utils import create_progress_bar
 # Database connection handling now done in call_openai_api
 from .output import append_jsonl_response, initialize_jsonl_output
@@ -200,10 +201,13 @@ def process_artists_concurrent(
     db_pool: Optional[object] = None,
     test_mode: bool = False,
     resume_mode: bool = False,
+    daily_request_limit: Optional[int] = None,
+    quota_threshold: float = 0.8,
+    quota_monitoring: bool = True,
 ) -> Tuple[int, int]:
     """
     Process artists concurrently with streaming JSONL output.
-    
+
     Responses are written to the JSONL file immediately after successful
     API calls and database commits, ensuring memory-efficient processing
     and fault-tolerant operation.
@@ -218,6 +222,9 @@ def process_artists_concurrent(
         db_pool: Database connection pool for bio updates (optional)
         test_mode: If True, use test_artists table
         resume_mode: If True, append to existing file instead of overwriting
+        daily_request_limit: Optional daily request limit for quota monitoring
+        quota_threshold: Pause threshold as decimal (0.8 = 80%)
+        quota_monitoring: If True, enable quota monitoring and pause/resume
 
     Returns:
         Tuple of (successful_calls, failed_calls)
@@ -238,6 +245,16 @@ def process_artists_concurrent(
         logger.error(f"Failed to initialize streaming output file: {e}")
         raise
 
+    # Initialize quota monitoring and pause controller if enabled
+    quota_monitor = None
+    pause_controller = None
+    if quota_monitoring:
+        quota_monitor = QuotaMonitor(daily_request_limit, quota_threshold)
+        pause_controller = PauseController()
+        logger.info(f"Quota monitoring enabled: daily_limit={daily_request_limit}, threshold={quota_threshold}")
+    else:
+        logger.info("Quota monitoring disabled")
+
     logger.info(f"Starting concurrent processing with {max_workers} workers")
 
     # Track progress for periodic updates
@@ -251,18 +268,24 @@ def process_artists_concurrent(
         future_to_artist = {}
         future_to_worker = {}
         for i, artist in enumerate(artists):
+            # Gate new task submission with pause controller
+            if pause_controller is not None:
+                pause_controller.wait_if_paused()
+
             worker_id = f"W{i % max_workers + 1:02d}"  # W01, W02, W03, etc.
-            
+
             future = executor.submit(
-                call_openai_api, 
-                client, 
-                artist, 
-                prompt_id, 
-                version, 
+                call_openai_api,
+                client,
+                artist,
+                prompt_id,
+                version,
                 worker_id,
                 db_pool,  # Pass pool instead of connection
                 False,  # skip_existing
-                test_mode
+                test_mode,
+                quota_monitor,  # Pass quota monitor
+                pause_controller  # Pass pause controller
             )
             future_to_artist[future] = artist
             future_to_worker[future] = worker_id
@@ -294,14 +317,21 @@ def process_artists_concurrent(
                     )
                 else:
                     successful_calls += 1
-                    
-                    # Stream successful response to JSONL file immediately  
+
+                    # Stream successful response to JSONL file immediately
                     try:
                         append_jsonl_response(api_response, output_path, prompt_id, version)
                         logger.debug(f"Streamed response for '{artist.name}' to {output_path}")
                     except Exception as e:
                         logger.error(f"Failed to stream response for '{artist.name}': {e}")
-                    
+
+                    # Check if we should pause processing based on quota
+                    if quota_monitor is not None and pause_controller is not None:
+                        should_pause, pause_reason = quota_monitor.should_pause()
+                        if should_pause:
+                            pause_controller.pause(pause_reason)
+                            logger.warning(f"Processing paused due to quota: {pause_reason}")
+
                     log_progress_update(
                         successful_calls + failed_calls,
                         len(artists),
@@ -361,11 +391,18 @@ def process_artists_concurrent(
                     remaining_artists / current_rate if current_rate > 0 else 0
                 )
 
+                # Include quota metrics in progress logging if monitoring is enabled
+                quota_status_msg = ""
+                if quota_monitor is not None:
+                    metrics = quota_monitor.get_current_metrics()
+                    if metrics is not None:
+                        quota_status_msg = f" - Quota: {metrics.usage_percentage:.1f}% used"
+
                 logger.info(
                     f"📊 Concurrent Progress: {total_processed}/{len(artists)} artists processed "
                     f"({(total_processed/len(artists)*100):.1f}%) - "
                     f"Rate: {current_rate:.2f} artists/sec - "
-                    f"ETA: {estimated_remaining_time:.0f}s remaining"
+                    f"ETA: {estimated_remaining_time:.0f}s remaining{quota_status_msg}"
                 )
                 last_progress_time = current_time
 
