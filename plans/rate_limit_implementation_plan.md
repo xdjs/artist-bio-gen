@@ -325,10 +325,10 @@ def log_rate_limit_event(error_type: str, retry_after: int, worker_id: str)
 - **Rate-limited**: Log every N requests or threshold crossings to prevent spam
 
 **Acceptance Criteria**:
-- [ ] Structured JSON logging for all quota events
-- [ ] Rate-limited logging to prevent spam under load
-- [ ] Clear event categorization
-- [ ] Fits existing logging utilities pattern
+- [x] Structured JSON logging for all quota events
+- [x] Rate-limited logging to prevent spam under load
+- [x] Clear event categorization
+- [x] Fits existing logging utilities pattern
 
 ---
 

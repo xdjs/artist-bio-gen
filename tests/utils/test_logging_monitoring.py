@@ -25,6 +25,18 @@ from artist_bio_gen.utils import (
     setup_logging,
 )
 
+# Import quota monitoring logging functions
+from artist_bio_gen.utils.logging import (
+    log_quota_metrics,
+    log_pause_event,
+    log_resume_event,
+    log_rate_limit_event,
+    set_quota_log_interval,
+)
+
+# Import quota models for testing
+from artist_bio_gen.models.quota import QuotaStatus, QuotaMetrics
+
 # Import core processing functions
 from artist_bio_gen.core import (
     calculate_processing_stats,
@@ -345,6 +357,237 @@ class TestEnhancedMainFunction(unittest.TestCase):
         # (We can't easily test the actual logging level change without more complex mocking)
 
 
+class TestQuotaMonitoringLogging(unittest.TestCase):
+    """Test cases for quota monitoring and alerting logging functions."""
+
+    def setUp(self):
+        """Set up test fixtures."""
+        from datetime import datetime
+
+        # Create test quota metrics
+        self.test_quota_metrics = QuotaMetrics(
+            requests_used_today=50,
+            daily_limit=100,
+            usage_percentage=50.0,
+            should_pause=False,
+            pause_reason=None
+        )
+
+        # Create test quota status
+        self.test_quota_status = QuotaStatus(
+            requests_remaining=4950,
+            requests_limit=5000,
+            tokens_remaining=3900000,
+            tokens_limit=4000000,
+            reset_requests="60s",
+            reset_tokens="60s",
+            timestamp=datetime.now()
+        )
+
+    def test_log_quota_metrics_info_level(self):
+        """Test logging quota metrics at info level (below warning threshold)."""
+        mock_logger = MagicMock()
+
+        log_quota_metrics(self.test_quota_metrics, "W01", mock_logger)
+
+        mock_logger.info.assert_called_once()
+        log_message = mock_logger.info.call_args[0][0]
+
+        # Check structured log format
+        self.assertIn("QUOTA_METRICS:", log_message)
+        self.assertIn('"event_type": "quota_metrics"', log_message)
+        self.assertIn('"worker_id": "W01"', log_message)
+        self.assertIn('"alert_level": "info"', log_message)
+        self.assertIn('"usage_percentage": 50.0', log_message)
+
+    def test_log_quota_metrics_warning_level(self):
+        """Test logging quota metrics at warning level (60%+ usage)."""
+        mock_logger = MagicMock()
+        warning_metrics = QuotaMetrics(
+            requests_used_today=65,
+            daily_limit=100,
+            usage_percentage=65.0,
+            should_pause=False,
+            pause_reason=None
+        )
+
+        log_quota_metrics(warning_metrics, "W02", mock_logger)
+
+        mock_logger.warning.assert_called_once()
+        log_message = mock_logger.warning.call_args[0][0]
+
+        self.assertIn("QUOTA_WARNING:", log_message)
+        self.assertIn('"alert_level": "warning"', log_message)
+        self.assertIn('"usage_percentage": 65.0', log_message)
+
+    def test_log_quota_metrics_critical_level(self):
+        """Test logging quota metrics at critical level (80%+ usage)."""
+        mock_logger = MagicMock()
+        critical_metrics = QuotaMetrics(
+            requests_used_today=85,
+            daily_limit=100,
+            usage_percentage=85.0,
+            should_pause=True,
+            pause_reason="Critical threshold reached"
+        )
+
+        log_quota_metrics(critical_metrics, "W03", mock_logger)
+
+        mock_logger.error.assert_called_once()
+        log_message = mock_logger.error.call_args[0][0]
+
+        self.assertIn("QUOTA_CRITICAL:", log_message)
+        self.assertIn('"alert_level": "critical"', log_message)
+        self.assertIn('"should_pause": true', log_message)
+
+    def test_log_quota_metrics_emergency_level(self):
+        """Test logging quota metrics at emergency level (95%+ usage)."""
+        mock_logger = MagicMock()
+        emergency_metrics = QuotaMetrics(
+            requests_used_today=97,
+            daily_limit=100,
+            usage_percentage=97.0,
+            should_pause=True,
+            pause_reason="Emergency threshold reached"
+        )
+
+        log_quota_metrics(emergency_metrics, "W04", mock_logger)
+
+        mock_logger.error.assert_called_once()
+        log_message = mock_logger.error.call_args[0][0]
+
+        self.assertIn("QUOTA_EMERGENCY:", log_message)
+        self.assertIn('"alert_level": "emergency"', log_message)
+
+    def test_log_quota_metrics_rate_limiting(self):
+        """Test rate limiting functionality prevents log spam."""
+        mock_logger = MagicMock()
+        # Reset global state
+        import artist_bio_gen.utils.logging as logging_module
+        logging_module._last_quota_log_time = 0.0
+        logging_module._last_quota_threshold = 0.0
+
+        # Set short interval for testing
+        set_quota_log_interval(1)
+
+        # First call should log
+        log_quota_metrics(self.test_quota_metrics, "W01", mock_logger)
+        self.assertEqual(mock_logger.info.call_count, 1)
+
+        # Immediate second call with same threshold should not log
+        log_quota_metrics(self.test_quota_metrics, "W01", mock_logger)
+        self.assertEqual(mock_logger.info.call_count, 1)  # Still 1, not 2
+
+    def test_log_pause_event_with_resume_time(self):
+        """Test logging pause event with scheduled resume time."""
+        mock_logger = MagicMock()
+        from datetime import datetime, timedelta
+
+        resume_time = datetime.now() + timedelta(hours=1)
+        log_pause_event("Quota threshold exceeded", resume_time, mock_logger)
+
+        mock_logger.warning.assert_called_once()
+        log_message = mock_logger.warning.call_args[0][0]
+
+        self.assertIn("QUOTA_PAUSE:", log_message)
+        self.assertIn('"event_type": "quota_pause"', log_message)
+        self.assertIn('"reason": "Quota threshold exceeded"', log_message)
+        self.assertIn('"auto_resume": true', log_message)
+
+    def test_log_pause_event_without_resume_time(self):
+        """Test logging pause event without scheduled resume time."""
+        mock_logger = MagicMock()
+        log_pause_event("Manual pause requested", None, mock_logger)
+
+        mock_logger.warning.assert_called_once()
+        log_message = mock_logger.warning.call_args[0][0]
+
+        self.assertIn("QUOTA_PAUSE:", log_message)
+        self.assertIn('"auto_resume": false', log_message)
+        self.assertIn('"resume_time": null', log_message)
+
+    def test_log_resume_event_with_quota_status(self):
+        """Test logging resume event with quota status information."""
+        mock_logger = MagicMock()
+        duration_paused = 3661.5  # 1 hour, 1 minute, 1.5 seconds
+
+        log_resume_event(duration_paused, self.test_quota_status, mock_logger)
+
+        mock_logger.info.assert_called_once()
+        log_message = mock_logger.info.call_args[0][0]
+
+        self.assertIn("QUOTA_RESUME:", log_message)
+        self.assertIn('"event_type": "quota_resume"', log_message)
+        self.assertIn('"duration_paused_seconds": 3661.5', log_message)
+        self.assertIn('"duration_paused_minutes": 61.0', log_message)  # Allow minor rounding differences
+        self.assertIn('"requests_remaining": 4950', log_message)
+        self.assertIn('"tokens_remaining": 3900000', log_message)
+
+    def test_log_resume_event_without_quota_status(self):
+        """Test logging resume event without quota status information."""
+        mock_logger = MagicMock()
+        duration_paused = 120.5
+
+        log_resume_event(duration_paused, None, mock_logger)
+
+        mock_logger.info.assert_called_once()
+        log_message = mock_logger.info.call_args[0][0]
+
+        self.assertIn("QUOTA_RESUME:", log_message)
+        self.assertIn('"duration_paused_seconds": 120.5', log_message)
+        # Should not contain quota status fields
+        self.assertNotIn("requests_remaining", log_message)
+
+    def test_log_rate_limit_event_quota_error(self):
+        """Test logging rate limit event for quota errors."""
+        mock_logger = MagicMock()
+        log_rate_limit_event("insufficient_quota", 300, "W05", mock_logger)
+
+        mock_logger.error.assert_called_once()
+        log_message = mock_logger.error.call_args[0][0]
+
+        self.assertIn("RATE_LIMIT_QUOTA:", log_message)
+        self.assertIn('"event_type": "rate_limit"', log_message)
+        self.assertIn('"error_type": "insufficient_quota"', log_message)
+        self.assertIn('"retry_after_seconds": 300', log_message)
+        self.assertIn('"has_retry_after": true', log_message)
+
+    def test_log_rate_limit_event_429_error(self):
+        """Test logging rate limit event for 429 rate limiting."""
+        mock_logger = MagicMock()
+        log_rate_limit_event("rate_limit", 60, "W06", mock_logger)
+
+        mock_logger.warning.assert_called_once()
+        log_message = mock_logger.warning.call_args[0][0]
+
+        self.assertIn("RATE_LIMIT_429:", log_message)
+        self.assertIn('"error_type": "rate_limit"', log_message)
+
+    def test_log_rate_limit_event_no_retry_after(self):
+        """Test logging rate limit event without Retry-After header."""
+        mock_logger = MagicMock()
+        log_rate_limit_event("server_error", None, "W07", mock_logger)
+
+        mock_logger.info.assert_called_once()
+        log_message = mock_logger.info.call_args[0][0]
+
+        self.assertIn("RATE_LIMIT_EVENT:", log_message)
+        self.assertIn('"retry_after_seconds": null', log_message)
+        self.assertIn('"has_retry_after": false', log_message)
+
+    def test_set_quota_log_interval(self):
+        """Test setting quota log interval."""
+        import artist_bio_gen.utils.logging as logging_module
+
+        original_interval = logging_module._quota_log_interval
+
+        set_quota_log_interval(300)
+        self.assertEqual(logging_module._quota_log_interval, 300)
+
+        # Restore original
+        logging_module._quota_log_interval = original_interval
+
+
 if __name__ == "__main__":
     # Create a test suite
     test_suite = unittest.TestSuite()
@@ -357,6 +600,7 @@ if __name__ == "__main__":
         TestLoggingFunctions,
         TestLoggingConfiguration,
         TestEnhancedMainFunction,
+        TestQuotaMonitoringLogging,
     ]
 
     for test_class in test_classes:
