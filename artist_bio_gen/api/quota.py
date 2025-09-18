@@ -386,15 +386,23 @@ class PauseController:
 
         logger.debug("PauseController initialized (unpaused)")
 
-    def pause(self, reason: str, resume_at: Optional[float] = None):
+    def pause(self, reason: str, resume_at: Optional[float] = None) -> bool:
         """
-        Pause processing with optional resume time.
+        Pause processing with optional resume time. Idempotent operation.
 
         Args:
             reason: Reason for pausing
             resume_at: Optional timestamp to automatically resume
+
+        Returns:
+            True if pause was newly initiated, False if already paused
         """
         with self._lock:
+            was_already_paused = not self._pause_event.is_set()
+            if was_already_paused:
+                logger.debug(f"Already paused (reason: {self._pause_reason}), ignoring new pause: {reason}")
+                return False
+
             self._pause_event.clear()
             self._pause_reason = reason
             self._resume_time = resume_at
@@ -404,6 +412,8 @@ class PauseController:
             logger.warning(f"PAUSED: {reason} - Will resume at {resume_datetime}")
         else:
             logger.warning(f"PAUSED: {reason} - Manual resume required")
+
+        return True
 
     def resume(self, reason: str = "Manual resume"):
         """

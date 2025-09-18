@@ -26,6 +26,10 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
+# Global tracking for auto-resume timers to prevent resource leaks
+_active_timers = []
+_timer_lock = threading.Lock()
+
 
 def _parse_reset_to_timestamp(reset_value: Optional[str]) -> Optional[float]:
     """Convert a quota reset hint into a UNIX timestamp."""
@@ -106,9 +110,17 @@ def _schedule_auto_resume(pause_controller: PauseController, resume_at: Optional
         pause_controller.resume("Quota window reset")
         return
 
-    timer = threading.Timer(delay, pause_controller.resume, kwargs={"reason": "Quota window reset"})
-    timer.daemon = True
-    timer.start()
+    # Cancel any existing timers to prevent resource leaks
+    with _timer_lock:
+        for existing_timer in _active_timers:
+            existing_timer.cancel()
+        _active_timers.clear()
+
+        # Create and track the new timer
+        timer = threading.Timer(delay, pause_controller.resume, kwargs={"reason": "Quota window reset"})
+        timer.daemon = True
+        timer.start()
+        _active_timers.append(timer)
 
 def log_processing_start(
     total_artists: int, input_file: str, prompt_id: str, max_workers: int
@@ -413,11 +425,11 @@ def process_artists_concurrent(
                     if quota_monitor is not None and pause_controller is not None:
                         should_pause, pause_reason = quota_monitor.should_pause()
                         if should_pause:
-                            if pause_controller.is_paused():
-                                logger.debug("Quota pause already active; skipping duplicate pause request")
-                            else:
-                                resume_at = _estimate_resume_time(quota_monitor)
-                                pause_controller.pause(pause_reason, resume_at=resume_at)
+                            # Atomic check-and-pause operation to prevent race conditions
+                            # The pause method is now idempotent and returns whether pause was newly initiated
+                            resume_at = _estimate_resume_time(quota_monitor)
+                            if pause_controller.pause(pause_reason, resume_at=resume_at):
+                                # Only schedule auto-resume if pause was newly initiated
                                 _schedule_auto_resume(pause_controller, resume_at)
 
                                 if resume_at is not None:
@@ -510,4 +522,13 @@ def process_artists_concurrent(
     logger.info(
         f"Concurrent processing completed: {successful_calls} successful, {failed_calls} failed"
     )
+
+    # Clean up any active auto-resume timers
+    with _timer_lock:
+        if _active_timers:
+            logger.debug("Cancelling %d active auto-resume timer(s)", len(_active_timers))
+            for timer in _active_timers:
+                timer.cancel()
+            _active_timers.clear()
+
     return successful_calls, failed_calls
