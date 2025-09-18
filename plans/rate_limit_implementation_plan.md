@@ -354,19 +354,21 @@ def log_rate_limit_event(error_type: str, retry_after: int, worker_id: str)
 
 **Completion Notes**: All test files reviewed and verified. 59 quota-specific tests passing, 293 total tests passing.
 
-### Task 4.2: Integration Tests with Mock API
+### Task 4.2: Integration Tests with Mock API ✅ COMPLETED
 **File**: `tests/integration/test_rate_limiting_integration.py` (NEW)
 **Estimated Time**: 3 hours
 **Dependencies**: Task 4.1
 
 **Test Scenarios**:
-- [ ] Quota threshold triggering pause with PauseController
-- [ ] Resume from computed header times vs fixed 24h
-- [ ] Different SDK exception types and retry strategies
-- [ ] ThreadPoolExecutor behavior during pause events
-- [ ] Configuration parameter validation
-- [ ] Progress preservation during pauses
-- [ ] Non-streaming response path coverage (no streaming in codebase)
+- [x] Quota threshold triggering pause with PauseController
+- [x] Resume from computed header times vs fixed 24h
+- [x] Different SDK exception types and retry strategies
+- [x] ThreadPoolExecutor behavior during pause events
+- [x] Configuration parameter validation
+- [x] Progress preservation during pauses
+- [x] Non-streaming response path coverage (no streaming in codebase)
+
+**Completion Notes**: All integration tests created and passing. 17 new integration tests covering all scenarios, 310 total tests passing.
 
 ### Task 4.3: Small Batch Testing (100 Artists)
 **Estimated Time**: 2 hours
