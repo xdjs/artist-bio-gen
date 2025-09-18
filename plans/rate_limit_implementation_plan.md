@@ -334,7 +334,7 @@ def log_rate_limit_event(error_type: str, retry_after: int, worker_id: str)
 
 ## Phase 4: Testing & Validation (Days 4-5)
 
-### Task 4.1: Unit Tests for Quota Components
+### Task 4.1: Unit Tests for Quota Components ✅ COMPLETED
 **Files** (Following existing test structure):
 - `tests/api/test_quota_headers.py` (NEW)
 - `tests/api/test_enhanced_backoff.py` (NEW)
@@ -345,12 +345,14 @@ def log_rate_limit_event(error_type: str, retry_after: int, worker_id: str)
 **Dependencies**: Phases 1-3
 
 **Test Coverage**:
-- [ ] Mock `with_raw_response` objects exposing `headers` and `parse().usage`
-- [ ] Header parsing (missing/zero/units), handle None gracefully
-- [ ] Backoff calculations with different error types
-- [ ] Thread safety under concurrency
-- [ ] State persistence with atomic writes
-- [ ] All tests offline with mocked SDK responses
+- [x] Mock `with_raw_response` objects exposing `headers` and `parse().usage`
+- [x] Header parsing (missing/zero/units), handle None gracefully
+- [x] Backoff calculations with different error types
+- [x] Thread safety under concurrency
+- [x] State persistence with atomic writes
+- [x] All tests offline with mocked SDK responses
+
+**Completion Notes**: All test files reviewed and verified. 59 quota-specific tests passing, 293 total tests passing.
 
 ### Task 4.2: Integration Tests with Mock API
 **File**: `tests/integration/test_rate_limiting_integration.py` (NEW)
