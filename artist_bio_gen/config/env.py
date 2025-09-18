@@ -42,6 +42,13 @@ class Env:
     OPENAI_PROMPT_ID: Optional[str] = None
     OPENAI_ORG_ID: Optional[str] = None
 
+    # Quota and rate-limit configuration (Task 2.2)
+    QUOTA_MONITORING: bool = True
+    QUOTA_THRESHOLD: float = 0.8
+    DAILY_REQUEST_LIMIT: Optional[int] = None
+    PAUSE_DURATION_HOURS: int = 24
+    QUOTA_LOG_INTERVAL: int = 100
+
     @staticmethod
     def load(cli_overrides: Optional[Mapping[str, str]] = None) -> "Env":
         """
@@ -70,6 +77,12 @@ class Env:
             "DATABASE_URL": None,
             "OPENAI_PROMPT_ID": None,
             "OPENAI_ORG_ID": None,
+            # Quota defaults
+            "QUOTA_MONITORING": "true",
+            "QUOTA_THRESHOLD": "0.8",
+            "DAILY_REQUEST_LIMIT": None,
+            "PAUSE_DURATION_HOURS": "24",
+            "QUOTA_LOG_INTERVAL": "100",
         }
         
         # Step 2: Load from .env.local file (optional)
@@ -86,7 +99,7 @@ class Env:
             for key, value in cli_overrides.items():
                 if key in values and value is not None:
                     values[key] = value.strip() if value.strip() else None
-        
+
         # Validation: Check required fields
         missing_required = []
         if not values["OPENAI_API_KEY"]:
@@ -98,13 +111,51 @@ class Env:
             for field in missing_required:
                 logger.error(f"ERROR: {field} is required but was not provided (env/CLI).")
             raise ConfigError(f"Missing required configuration: {', '.join(missing_required)}")
-        
+
+        # Parse and validate quota-related values
+        try:
+            quota_monitoring = str(values["QUOTA_MONITORING"]).strip().lower()
+            if quota_monitoring in ("1", "true", "yes", "on"):
+                qmon = True
+            elif quota_monitoring in ("0", "false", "no", "off"):
+                qmon = False
+            else:
+                raise ConfigError("QUOTA_MONITORING must be true/false")
+
+            qthresh = float(values["QUOTA_THRESHOLD"]) if values["QUOTA_THRESHOLD"] is not None else 0.8
+            if not (0.1 <= qthresh <= 1.0):
+                raise ConfigError("QUOTA_THRESHOLD must be between 0.1 and 1.0")
+
+            dlimit = values["DAILY_REQUEST_LIMIT"]
+            if dlimit is None or str(dlimit).strip() == "":
+                dlimit_parsed = None
+            else:
+                dlimit_parsed = int(dlimit)
+                if dlimit_parsed <= 0:
+                    raise ConfigError("DAILY_REQUEST_LIMIT must be a positive integer")
+
+            pause_hours = int(values["PAUSE_DURATION_HOURS"]) if values["PAUSE_DURATION_HOURS"] is not None else 24
+            if not (1 <= pause_hours <= 72):
+                raise ConfigError("PAUSE_DURATION_HOURS must be between 1 and 72 hours")
+
+            qlogint = int(values["QUOTA_LOG_INTERVAL"]) if values["QUOTA_LOG_INTERVAL"] is not None else 100
+            if qlogint <= 0:
+                raise ConfigError("QUOTA_LOG_INTERVAL must be a positive integer")
+
+        except ValueError as ve:
+            raise ConfigError(f"Invalid quota configuration value: {ve}") from ve
+
         # Create and store singleton instance
         _ENV = Env(
             OPENAI_API_KEY=values["OPENAI_API_KEY"],
             DATABASE_URL=values["DATABASE_URL"], 
             OPENAI_PROMPT_ID=values["OPENAI_PROMPT_ID"],
             OPENAI_ORG_ID=values["OPENAI_ORG_ID"],
+            QUOTA_MONITORING=qmon,
+            QUOTA_THRESHOLD=qthresh,
+            DAILY_REQUEST_LIMIT=dlimit_parsed,
+            PAUSE_DURATION_HOURS=pause_hours,
+            QUOTA_LOG_INTERVAL=qlogint,
         )
         
         logger.debug("Environment configuration loaded successfully")

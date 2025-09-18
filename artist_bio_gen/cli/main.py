@@ -76,7 +76,20 @@ def _build_cli_overrides(args) -> dict:
     # Handle special case for prompt-id which could come from --prompt-id or --openai-prompt-id
     if hasattr(args, "prompt_id") and args.prompt_id is not None:
         overrides["OPENAI_PROMPT_ID"] = args.prompt_id
-    
+
+    # Quota-related flags map directly to env-style keys when explicitly provided
+    # Only include if not None (ensures truly explicit CLI setting)
+    if getattr(args, "quota_threshold", None) is not None:
+        overrides["QUOTA_THRESHOLD"] = str(args.quota_threshold)
+    if getattr(args, "quota_monitoring", None) is not None:
+        overrides["QUOTA_MONITORING"] = str(args.quota_monitoring)
+    if getattr(args, "daily_limit", None) is not None:
+        overrides["DAILY_REQUEST_LIMIT"] = str(args.daily_limit)
+    if getattr(args, "pause_duration", None) is not None:
+        overrides["PAUSE_DURATION_HOURS"] = str(args.pause_duration)
+    if getattr(args, "quota_log_interval", None) is not None:
+        overrides["QUOTA_LOG_INTERVAL"] = str(args.quota_log_interval)
+
     return overrides
 
 
@@ -183,6 +196,9 @@ def main():
                 db_pool=db_pool,
                 test_mode=args.test_mode,
                 resume_mode=args.resume,
+                daily_request_limit=env.DAILY_REQUEST_LIMIT,
+                quota_threshold=env.QUOTA_THRESHOLD,
+                quota_monitoring=env.QUOTA_MONITORING,
             )
 
             logger.info(f"Streaming output completed: {args.output}")

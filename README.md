@@ -137,19 +137,30 @@ python3 run_artists.py --input-file artists.csv --prompt-id your-prompt-id
 
 | Option | Description | Default | Required |
 |--------|-------------|---------|----------|
+| **Core Options** |
 | `--input-file` | CSV-like text file path | - | ✅ |
 | `--prompt-id` | OpenAI prompt ID | `OPENAI_PROMPT_ID` env var | ✅ |
 | `--version` | Prompt version | None | ❌ |
 | `--output` | JSONL output file path | `out.jsonl` | ❌ |
+| **Processing Options** |
 | `--max-workers` | Max concurrent requests | `4` | ❌ |
-| `--enable-db` | Enable database bio updates | `False` | ❌ |
-| `--test-mode` | Use test_artists table | `False` | ❌ |
 | `--dry-run` | Parse inputs without API calls | `False` | ❌ |
 | `--verbose` | Enable debug logging | `False` | ❌ |
+| `--resume` | Skip artists already in output file | `False` | ❌ |
+| **Quota Management** |
+| `--quota-monitoring` | Enable/disable quota tracking | `true` | ❌ |
+| `--quota-threshold` | Pause threshold (0.1-1.0) | `0.8` | ❌ |
+| `--daily-limit` | Daily request limit | None | ❌ |
+| `--pause-duration` | Hours to pause (1-72) | `24` | ❌ |
+| `--quota-log-interval` | Log metrics every N requests | `100` | ❌ |
+| **Database Options** |
+| `--enable-db` | Enable database bio updates | `False` | ❌ |
+| `--test-mode` | Use test_artists table | `False` | ❌ |
+| `--db-url` | Database URL | `DATABASE_URL` env var | ❌ |
+| **API Configuration** |
 | `--openai-api-key` | OpenAI API key | `OPENAI_API_KEY` env var | ❌ |
 | `--openai-prompt-id` | OpenAI prompt ID | `OPENAI_PROMPT_ID` env var | ❌ |
 | `--openai-org-id` | OpenAI organization ID | `OPENAI_ORG_ID` env var | ❌ |
-| `--db-url` | Database URL | `DATABASE_URL` env var | ❌ |
 
 ### Configuration Precedence
 
@@ -169,6 +180,36 @@ export OPENAI_API_KEY="env-key"
 python3 run_artists.py --input-file artists.csv --openai-api-key "cli-key"
 # Uses "cli-key" instead of "env-key"
 ```
+
+## 🚦 Rate Limiting & Quota Management
+
+The application includes sophisticated rate limiting and quota management to prevent API exhaustion:
+
+### Features
+- **Automatic Quota Monitoring**: Tracks API usage against OpenAI rate limits
+- **Smart Pausing**: Automatically pauses when approaching quota thresholds
+- **Exponential Backoff**: Intelligent retry strategies for different error types
+- **Resume Capability**: Continue processing after quota resets
+- **Configurable Thresholds**: Fine-tune pause behavior to your needs
+
+### Quick Configuration
+```bash
+# Conservative settings for production
+python3 -m artist_bio_gen.main \
+  --input-file artists.csv \
+  --quota-threshold 0.8 \
+  --daily-limit 5000 \
+  --max-workers 4
+
+# Aggressive settings for maximum throughput
+python3 -m artist_bio_gen.main \
+  --input-file artists.csv \
+  --quota-threshold 0.95 \
+  --max-workers 16 \
+  --quota-monitoring true
+```
+
+For detailed configuration options, see [docs/CONFIGURATION.md](docs/CONFIGURATION.md).
 
 ### Examples
 
@@ -470,14 +511,20 @@ The script handles various error scenarios:
 - ✅ Comprehensive logging and monitoring
 - ✅ Testing framework
 - ✅ Documentation
+- ✅ Rate limiting and quota management
+- ✅ Exponential backoff with intelligent retry strategies
+- ✅ Concurrent processing with ThreadPoolExecutor
+- ✅ JSONL output file generation with streaming
+- ✅ Resume capability for interrupted processing
 
 **In Progress:**
 - 🔄 Enhanced error handling
+- 🔄 Additional documentation updates
 
-**Planned:**
-- ⏳ Concurrent processing with asyncio
-- ⏳ Retry logic with exponential backoff
-- ⏳ JSONL output file generation
+**Future Enhancements:**
+- ⏳ Adaptive concurrency management
+- ⏳ Priority queue for retry handling
+- ⏳ Real-time monitoring dashboard
 
 ## 🤝 Contributing
 
