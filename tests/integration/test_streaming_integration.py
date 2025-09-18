@@ -97,7 +97,7 @@ class TestStreamingIntegration(unittest.TestCase):
         self.assertLess(parse_duration, 5.0, f"Parsing took too long: {parse_duration:.2f}s")
         
         # Mock the API call to simulate successful processing
-        def mock_call_openai_api(client, artist, prompt_id, version, worker_id, db_connection, skip_existing, test_mode):
+        def mock_call_openai_api(client, artist, prompt_id, version, worker_id, db_connection, skip_existing, test_mode, quota_monitor=None, pause_controller=None):
             return self._create_mock_api_response(artist, success=True)
             
         mock_client = self._create_mock_openai_client()
@@ -163,7 +163,7 @@ class TestStreamingIntegration(unittest.TestCase):
         
         # Mock API call with mixed success/failure
         call_count = 0
-        def mock_call_openai_api_mixed(client, artist, prompt_id, version, worker_id, db_connection, skip_existing, test_mode):
+        def mock_call_openai_api_mixed(client, artist, prompt_id, version, worker_id, db_connection, skip_existing, test_mode, quota_monitor=None, pause_controller=None):
             nonlocal call_count
             call_count += 1
             # Fail every 5th call (20% failure rate)
@@ -230,7 +230,7 @@ class TestStreamingIntegration(unittest.TestCase):
         
         # Mock API call that tracks processing
         processed_count = 0
-        def mock_call_openai_api_counting(client, artist, prompt_id, version, worker_id, db_connection, skip_existing, test_mode):
+        def mock_call_openai_api_counting(client, artist, prompt_id, version, worker_id, db_connection, skip_existing, test_mode, quota_monitor=None, pause_controller=None):
             nonlocal processed_count
             processed_count += 1
             return self._create_mock_api_response(artist, success=True)
@@ -318,7 +318,7 @@ class TestStreamingIntegration(unittest.TestCase):
         
         parse_result = parse_input_file(input_path)
         
-        def mock_call_openai_api_concurrent(client, artist, prompt_id, version, worker_id, db_connection, skip_existing, test_mode):
+        def mock_call_openai_api_concurrent(client, artist, prompt_id, version, worker_id, db_connection, skip_existing, test_mode, quota_monitor=None, pause_controller=None):
             # Add small random delay to increase chance of race conditions
             time.sleep(0.001)
             return self._create_mock_api_response(artist, success=True)
