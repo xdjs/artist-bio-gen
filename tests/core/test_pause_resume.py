@@ -147,6 +147,83 @@ class TestPauseResume(unittest.TestCase):
                     self.assertIsNotNone(args[8])  # quota_monitor
                     self.assertIsNotNone(args[9])  # pause_controller
 
+    def test_processor_auto_resumes_after_quota_pause(self):
+        artists = [
+            ArtistData(artist_id=1, name="A", data="data"),
+            ArtistData(artist_id=2, name="B", data="data"),
+        ]
+
+        resume_timestamp = time.time() + 60
+
+        with patch("artist_bio_gen.core.processor.call_openai_api") as mock_call_api, \
+             patch(
+                 "artist_bio_gen.core.processor._estimate_resume_time",
+                 return_value=resume_timestamp,
+             ) as mock_estimate, \
+             patch("artist_bio_gen.core.processor.threading.Timer") as mock_timer_ctor, \
+             patch.object(
+                 QuotaMonitor,
+                 "should_pause",
+                 side_effect=[(True, "Daily quota reached"), (False, "Within quota")],
+             ):
+
+            from artist_bio_gen.models import ApiResponse
+
+            mock_api_response = ApiResponse(
+                artist_id=1,
+                artist_name="Test Artist",
+                artist_data="Test data",
+                response_text="Test bio",
+                response_id="test_id",
+                created=1234567890,
+                db_status="null",
+                error=None,
+            )
+            mock_call_api.return_value = (mock_api_response, 0.1)
+
+            timer_instance = Mock()
+            timer_instance.start = Mock()
+            mock_timer_ctor.return_value = timer_instance
+
+            resume_values = []
+            original_pause = PauseController.pause
+
+            def pause_wrapper(self, reason, resume_at=None):
+                resume_values.append(resume_at)
+                return original_pause(self, reason, resume_at)
+
+            with patch.object(PauseController, "pause", new=pause_wrapper):
+                with tempfile.TemporaryDirectory() as tmpdir:
+                    output_path = os.path.join(tmpdir, "output.jsonl")
+
+                    process_artists_concurrent(
+                        artists=artists,
+                        client=Mock(),
+                        prompt_id="prompt",
+                        version=None,
+                        max_workers=1,
+                        output_path=output_path,
+                        db_pool=None,
+                        test_mode=True,
+                        resume_mode=False,
+                        daily_request_limit=10,
+                        quota_threshold=0.8,
+                        quota_monitoring=True,
+                    )
+
+        self.assertTrue(resume_values)
+        self.assertEqual(resume_values[0], resume_timestamp)
+        mock_estimate.assert_called()
+        mock_timer_ctor.assert_called_once()
+
+        delay_arg = mock_timer_ctor.call_args[0][0]
+        resume_callable = mock_timer_ctor.call_args[0][1]
+        self.assertGreaterEqual(delay_arg, 0.0)
+        self.assertTrue(callable(resume_callable))
+
+        timer_instance.start.assert_called_once()
+        self.assertTrue(timer_instance.daemon)
+
     def test_processor_quota_disabled(self):
         """Test that processor works correctly with quota monitoring disabled."""
         # Create test artists

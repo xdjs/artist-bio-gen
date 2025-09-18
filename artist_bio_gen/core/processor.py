@@ -6,6 +6,7 @@ and statistics calculation for the artist bio generator application.
 """
 
 import logging
+import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta
@@ -25,6 +26,89 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
+
+def _parse_reset_to_timestamp(reset_value: Optional[str]) -> Optional[float]:
+    """Convert a quota reset hint into a UNIX timestamp."""
+
+    if not reset_value:
+        return None
+
+    reset_str = str(reset_value).strip()
+    if reset_str.lower() == "unknown":
+        return None
+
+    now = time.time()
+
+    suffix_multipliers = {
+        "ms": 0.001,
+        "s": 1.0,
+        "m": 60.0,
+        "h": 3600.0,
+    }
+
+    for suffix, multiplier in suffix_multipliers.items():
+        if reset_str.endswith(suffix):
+            try:
+                amount = float(reset_str[: -len(suffix)])
+            except ValueError:
+                return None
+
+            seconds = amount * multiplier
+            if seconds < 0:
+                return None
+            return now + seconds
+
+    try:
+        seconds = float(reset_str)
+    except ValueError:
+        seconds = None
+
+    if seconds is not None and seconds >= 0:
+        return now + seconds
+
+    try:
+        reset_dt = datetime.fromisoformat(reset_str.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+    return reset_dt.timestamp()
+
+
+def _estimate_resume_time(quota_monitor: QuotaMonitor) -> Optional[float]:
+    """Estimate when processing can resume based on quota state."""
+
+    status = quota_monitor.get_current_status()
+    if status is not None:
+        for reset_hint in (status.reset_requests, status.reset_tokens):
+            resume_at = _parse_reset_to_timestamp(reset_hint)
+            if resume_at is not None:
+                return resume_at
+
+    if quota_monitor.daily_limit_requests:
+        now = datetime.now()
+        next_midnight = (now + timedelta(days=1)).replace(
+            hour=0, minute=0, second=0, microsecond=0
+        )
+        return next_midnight.timestamp()
+
+    return None
+
+
+def _schedule_auto_resume(pause_controller: PauseController, resume_at: Optional[float]) -> None:
+    """Schedule automatic resume if a resume time is available."""
+
+    if resume_at is None:
+        return
+
+    delay = max(0.0, resume_at - time.time())
+
+    if delay <= 0:
+        pause_controller.resume("Quota window reset")
+        return
+
+    timer = threading.Timer(delay, pause_controller.resume, kwargs={"reason": "Quota window reset"})
+    timer.daemon = True
+    timer.start()
 
 def log_processing_start(
     total_artists: int, input_file: str, prompt_id: str, max_workers: int
@@ -329,8 +413,25 @@ def process_artists_concurrent(
                     if quota_monitor is not None and pause_controller is not None:
                         should_pause, pause_reason = quota_monitor.should_pause()
                         if should_pause:
-                            pause_controller.pause(pause_reason)
-                            logger.warning(f"Processing paused due to quota: {pause_reason}")
+                            if pause_controller.is_paused():
+                                logger.debug("Quota pause already active; skipping duplicate pause request")
+                            else:
+                                resume_at = _estimate_resume_time(quota_monitor)
+                                pause_controller.pause(pause_reason, resume_at=resume_at)
+                                _schedule_auto_resume(pause_controller, resume_at)
+
+                                if resume_at is not None:
+                                    resume_dt = datetime.fromtimestamp(resume_at)
+                                    logger.warning(
+                                        "Processing paused due to quota: %s - Auto-resume scheduled for %s",
+                                        pause_reason,
+                                        resume_dt.isoformat(),
+                                    )
+                                else:
+                                    logger.warning(
+                                        "Processing paused due to quota: %s - Manual resume required",
+                                        pause_reason,
+                                    )
 
                     log_progress_update(
                         successful_calls + failed_calls,
