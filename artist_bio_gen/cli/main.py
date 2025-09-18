@@ -196,6 +196,9 @@ def main():
                 db_pool=db_pool,
                 test_mode=args.test_mode,
                 resume_mode=args.resume,
+                daily_request_limit=env.DAILY_REQUEST_LIMIT,
+                quota_threshold=env.QUOTA_THRESHOLD,
+                quota_monitoring=env.QUOTA_MONITORING,
             )
 
             logger.info(f"Streaming output completed: {args.output}")
