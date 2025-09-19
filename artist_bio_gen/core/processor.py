@@ -17,7 +17,7 @@ from ..api import call_openai_api
 from ..api.quota import QuotaMonitor, PauseController
 from ..utils import create_progress_bar
 # Database connection handling now done in call_openai_api
-from .output import append_jsonl_response, initialize_jsonl_output
+from .output import initialize_jsonl_output
 
 try:
     from openai import OpenAI
@@ -381,7 +381,8 @@ def process_artists_concurrent(
                 False,  # skip_existing
                 test_mode,
                 quota_monitor,  # Pass quota monitor
-                pause_controller  # Pass pause controller
+                pause_controller,  # Pass pause controller
+                output_path  # Pass output path for streaming
             )
             future_to_artist[future] = artist
             future_to_worker[future] = worker_id
@@ -395,14 +396,7 @@ def process_artists_concurrent(
 
                 if api_response.error:
                     failed_calls += 1
-                    
-                    # Stream error response to JSONL file
-                    try:
-                        append_jsonl_response(api_response, output_path, prompt_id, version)
-                        logger.debug(f"Streamed error response for '{artist.name}' to {output_path}")
-                    except Exception as e:
-                        logger.error(f"Failed to stream error response for '{artist.name}': {e}")
-                    
+                    # Note: Error responses are already streamed to JSONL by the pipeline
                     log_progress_update(
                         successful_calls + failed_calls,
                         len(artists),
@@ -413,13 +407,7 @@ def process_artists_concurrent(
                     )
                 else:
                     successful_calls += 1
-
-                    # Stream successful response to JSONL file immediately
-                    try:
-                        append_jsonl_response(api_response, output_path, prompt_id, version)
-                        logger.debug(f"Streamed response for '{artist.name}' to {output_path}")
-                    except Exception as e:
-                        logger.error(f"Failed to stream response for '{artist.name}': {e}")
+                    # Note: Successful responses are already streamed to JSONL by the pipeline
 
                     # Check if we should pause processing based on quota
                     if quota_monitor is not None and pause_controller is not None:
@@ -459,31 +447,12 @@ def process_artists_concurrent(
             except Exception as e:
                 # Enhanced error isolation - each thread failure is isolated
                 failed_calls += 1
-                exc_name = type(e).__name__
-                error_msg = f"Concurrent processing error [{exc_name}]: {str(e)}"
-
-                error_response = ApiResponse(
-                    artist_id=artist.artist_id,
-                    artist_name=artist.name,
-                    artist_data=artist.data,
-                    response_text="",
-                    response_id="",
-                    created=0,
-                    error=error_msg,
-                )
-                
-                # Stream exception error response to JSONL file
-                try:
-                    append_jsonl_response(error_response, output_path, prompt_id, version)
-                    logger.debug(f"Streamed exception error response for '{artist.name}' to {output_path}")
-                except Exception as stream_e:
-                    logger.error(f"Failed to stream exception error response for '{artist.name}': {stream_e}")
-                
+                # Note: The error handling and streaming is already done in call_openai_api
                 log_progress_update(
                     successful_calls + failed_calls, len(artists), artist.name, False, 0.0, worker_id
                 )
                 logger.error(
-                    f"[{worker_id}] Thread error processing artist '{artist.name}': {error_msg}"
+                    f"[{worker_id}] Thread error processing artist '{artist.name}': {e}"
                 )
 
             # Log periodic progress updates during concurrent processing

@@ -9,10 +9,8 @@ import logging
 import time
 from typing import Optional, Tuple
 
+from ..core.pipeline import ResponseProcessor, RequestContext
 from ..models import ArtistData, ApiResponse
-from ..utils import strip_trailing_citations
-from ..utils.logging import log_transaction_success, log_transaction_failure
-from ..database import update_artist_bio, get_db_connection, release_db_connection
 from .utils import retry_with_exponential_backoff
 from .quota import QuotaMonitor, PauseController
 
@@ -38,6 +36,7 @@ def call_openai_api(
     test_mode: bool = False,
     quota_monitor: Optional[QuotaMonitor] = None,
     pause_controller: Optional[PauseController] = None,
+    output_path: Optional[str] = None,
 ) -> Tuple[ApiResponse, float]:
     """
     Make an API call to OpenAI Responses API for a single artist and optionally update database.
@@ -51,14 +50,34 @@ def call_openai_api(
         db_pool: Database connection pool for writing bio (optional)
         skip_existing: If True, skip database update if bio already exists
         test_mode: If True, use test database table
+        quota_monitor: Optional quota monitor instance
+        pause_controller: Optional pause controller instance
+        output_path: Optional path to stream JSONL output
 
     Returns:
         Tuple of (ApiResponse with the result or error information, duration in seconds)
     """
-    start_time = time.time()
-
     # Log start of processing
     logger.info(f"[{worker_id}] 🚀 Starting processing: {artist.name}")
+
+    # Create request context
+    context = RequestContext(
+        worker_id=worker_id,
+        prompt_id=prompt_id,
+        version=version,
+        output_path=output_path,
+        skip_existing=skip_existing,
+        test_mode=test_mode,
+        db_pool=db_pool,
+        quota_monitor=quota_monitor,
+        pause_controller=pause_controller,
+    )
+
+    # Create response processor with configured components
+    processor = ResponseProcessor(
+        quota_monitor=quota_monitor,
+        db_pool=db_pool,
+    )
 
     try:
         # Build variables dictionary
@@ -82,8 +101,6 @@ def call_openai_api(
 
         # Make the API call with raw response for headers when available
         response = None
-        headers = {}
-        usage_stats = None
         fallback_reason: Optional[str] = None
 
         try:
@@ -98,15 +115,7 @@ def call_openai_api(
             except (AttributeError, NotImplementedError) as raw_err:
                 fallback_reason = f"with_raw_response.create unavailable: {raw_err}"
             else:
-                headers = getattr(raw, "headers", {}) or {}
-                try:
-                    parsed = raw.parse()
-                except (AttributeError, NotImplementedError) as parse_err:
-                    fallback_reason = f"raw.parse unsupported: {parse_err}"
-                else:
-                    response = parsed
-                    # Extract usage if present
-                    usage_stats = getattr(parsed, "usage", None)
+                response = raw
 
         if response is None:
             if fallback_reason is not None:
@@ -114,154 +123,10 @@ def call_openai_api(
                     f"[{worker_id}] Raw response unavailable, falling back: {fallback_reason}"
                 )
             response = client.responses.create(prompt=prompt_config)
-            headers = {}
-            usage_stats = getattr(response, "usage", None)
 
-        # Extract and clean response text
-        raw_text = response.output_text
-        cleaned_text = strip_trailing_citations(raw_text)
-        if cleaned_text != raw_text:
-            logger.info(
-                f"[{worker_id}] ✂️ Stripped trailing citations from API response for {artist.name}"
-            )
-        response_text = cleaned_text
-        response_id = response.id
-        created = int(response.created_at)
-
-        # Update quota monitor if provided
-        if quota_monitor is not None:
-            try:
-                metrics = quota_monitor.update_from_response(headers, usage_stats)
-                logger.debug(
-                    f"[{worker_id}] Quota metrics: used_today={metrics.requests_used_today}, "
-                    f"usage={metrics.usage_percentage:.1f}% pause={metrics.should_pause}"
-                )
-            except Exception as qm_err:
-                logger.warning(f"[{worker_id}] Failed to update quota monitor: {qm_err}")
-
-        # Calculate timing
-        end_time = time.time()
-        duration = end_time - start_time
-
-        # Attempt database write if pool provided
-        db_status = "null"  # Default status when no database operation
-        if db_pool is not None:
-            db_connection = None
-            try:
-                # Get database connection just before database operation
-                db_connection = get_db_connection(db_pool)
-                if db_connection is None:
-                    db_status = "error"
-                    logger.warning(f"[{worker_id}] 💥 Failed to get database connection for {artist.name}")
-                else:
-                    db_result = update_artist_bio(
-                        connection=db_connection,
-                        artist_id=artist.artist_id,
-                        bio=response_text,
-                        skip_existing=skip_existing,
-                        test_mode=test_mode,
-                        worker_id=worker_id,
-                    )
-
-                    if db_result.success:
-                        if db_result.rows_affected > 0:
-                            db_status = "updated"
-                            logger.debug(
-                                f"[{worker_id}] 💾 Database updated for {artist.name}"
-                            )
-                        else:
-                            db_status = "skipped"
-                            logger.debug(
-                                f"[{worker_id}] ⏭️ Database update skipped for {artist.name}"
-                            )
-                    else:
-                        db_status = "error"
-                        logger.warning(
-                            f"[{worker_id}] 💥 Database update failed for {artist.name}: {db_result.error}"
-                        )
-
-            except Exception as db_error:
-                db_status = "error"
-                logger.error(
-                    f"[{worker_id}] 💥 Database update error for {artist.name}: {str(db_error)}"
-                )
-            finally:
-                # Always release the database connection back to the pool
-                if db_connection is not None:
-                    release_db_connection(db_pool, db_connection)
-        
-        # Log structured transaction information for database operations
-        if db_pool is not None:
-            if db_status in ["updated", "skipped"]:
-                # Log successful transaction (including skipped as successful completion)
-                log_transaction_success(
-                    artist_id=artist.artist_id,
-                    artist_name=artist.name,
-                    worker_id=worker_id,
-                    processing_duration=duration,
-                    db_status=db_status,
-                    response_id=response_id,
-                    timestamp=end_time,
-                    logger=logger
-                )
-            elif db_status == "error":
-                # Log failed database transaction
-                log_transaction_failure(
-                    artist_id=artist.artist_id,
-                    artist_name=artist.name,
-                    worker_id=worker_id,
-                    processing_duration=duration,
-                    error_message=f"Database operation failed: {db_status}",
-                    timestamp=end_time,
-                    logger=logger
-                )
-
-        api_response = ApiResponse(
-            artist_id=artist.artist_id,
-            artist_name=artist.name,
-            artist_data=artist.data,
-            response_text=response_text,
-            response_id=response_id,
-            created=created,
-            db_status=db_status,
-        )
-
-        logger.info(
-            f"[{worker_id}] ✅ Completed processing: {artist.name} ({duration:.2f}s) [DB: {db_status}]"
-        )
-        return api_response, duration
+        # Process response through the unified pipeline
+        return processor.process(response, artist, context)
 
     except Exception as e:
-        # Calculate timing even for errors
-        end_time = time.time()
-        duration = end_time - start_time
-
-        exc_name = type(e).__name__
-        error_msg = f"API call failed for artist '{artist.name}' [{exc_name}]: {str(e)}"
-
-        api_response = ApiResponse(
-            artist_id=artist.artist_id,
-            artist_name=artist.name,
-            artist_data=artist.data,
-            response_text="",
-            response_id="",
-            created=0,
-            db_status="null",  # No database operation on API error
-            error=error_msg,
-        )
-
-        # Log transaction failure for complete API errors
-        log_transaction_failure(
-            artist_id=artist.artist_id,
-            artist_name=artist.name,
-            worker_id=worker_id,
-            processing_duration=duration,
-            error_message=error_msg,
-            timestamp=end_time,
-            logger=logger
-        )
-
-        logger.error(
-            f"[{worker_id}] ❌ Failed processing: {artist.name} ({duration:.2f}s) - {error_msg}"
-        )
-        return api_response, duration
+        # Process error through the pipeline (for logging and output streaming)
+        return processor.process_error(e, artist, context)
