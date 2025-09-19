@@ -18,6 +18,9 @@ from ..api.quota import QuotaMonitor, PauseController
 from ..utils import create_progress_bar
 # Database connection handling now done in call_openai_api
 from .output import append_jsonl_response, initialize_jsonl_output
+from .resources import ProcessingContext
+from .orchestrator import ProcessingOrchestrator
+from .progress import BatchProgressReporter
 
 try:
     from openai import OpenAI
@@ -325,210 +328,27 @@ def process_artists_concurrent(
     Returns:
         Tuple of (successful_calls, failed_calls)
     """
-    successful_calls = 0
-    failed_calls = 0
-
-    # Initialize streaming JSONL output file
-    try:
-        if resume_mode:
-            # In resume mode, don't overwrite existing files
-            initialize_jsonl_output(output_path, overwrite_existing=False)
-            logger.info(f"Initialized streaming JSONL output for resume: {output_path}")
-        else:
-            initialize_jsonl_output(output_path, overwrite_existing=True)
-            logger.info(f"Initialized streaming JSONL output: {output_path}")
-    except Exception as e:
-        logger.error(f"Failed to initialize streaming output file: {e}")
-        raise
-
-    # Initialize quota monitoring and pause controller if enabled
-    quota_monitor = None
-    pause_controller = None
-    if quota_monitoring:
-        quota_monitor = QuotaMonitor(daily_request_limit, quota_threshold)
-        pause_controller = PauseController()
-        logger.info(f"Quota monitoring enabled: daily_limit={daily_request_limit}, threshold={quota_threshold}")
-    else:
-        logger.info("Quota monitoring disabled")
-
-    logger.info(f"Starting concurrent processing with {max_workers} workers")
-
-    # Track progress for periodic updates
-    progress_interval = max(
-        1, len(artists) // 10
-    )  # Log every 10% or at least every artist
-    last_progress_time = time.time()
-
-    with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        # Submit all tasks with unique worker IDs
-        future_to_artist = {}
-        future_to_worker = {}
-        for i, artist in enumerate(artists):
-            # Gate new task submission with pause controller
-            if pause_controller is not None:
-                pause_controller.wait_if_paused()
-
-            worker_id = f"W{i % max_workers + 1:02d}"  # W01, W02, W03, etc.
-
-            future = executor.submit(
-                call_openai_api,
-                client,
-                artist,
-                prompt_id,
-                version,
-                worker_id,
-                db_pool,  # Pass pool instead of connection
-                False,  # skip_existing
-                test_mode,
-                quota_monitor,  # Pass quota monitor
-                pause_controller  # Pass pause controller
-            )
-            future_to_artist[future] = artist
-            future_to_worker[future] = worker_id
-
-        # Process completed tasks as they finish
-        for future in as_completed(future_to_artist):
-            artist = future_to_artist[future]
-            worker_id = future_to_worker[future]
-            try:
-                api_response, duration = future.result()
-
-                if api_response.error:
-                    failed_calls += 1
-                    
-                    # Stream error response to JSONL file
-                    try:
-                        append_jsonl_response(api_response, output_path, prompt_id, version)
-                        logger.debug(f"Streamed error response for '{artist.name}' to {output_path}")
-                    except Exception as e:
-                        logger.error(f"Failed to stream error response for '{artist.name}': {e}")
-                    
-                    log_progress_update(
-                        successful_calls + failed_calls,
-                        len(artists),
-                        artist.name,
-                        False,
-                        duration,
-                        worker_id,
-                    )
-                else:
-                    successful_calls += 1
-
-                    # Stream successful response to JSONL file immediately
-                    try:
-                        append_jsonl_response(api_response, output_path, prompt_id, version)
-                        logger.debug(f"Streamed response for '{artist.name}' to {output_path}")
-                    except Exception as e:
-                        logger.error(f"Failed to stream response for '{artist.name}': {e}")
-
-                    # Check if we should pause processing based on quota
-                    if quota_monitor is not None and pause_controller is not None:
-                        should_pause, pause_reason = quota_monitor.should_pause()
-                        if should_pause:
-                            # Atomic check-and-pause operation to prevent race conditions
-                            # The pause method is now idempotent and returns whether pause was newly initiated
-                            resume_at = _estimate_resume_time(quota_monitor)
-                            if pause_controller.pause(pause_reason, resume_at=resume_at):
-                                # Only schedule auto-resume if pause was newly initiated
-                                _schedule_auto_resume(pause_controller, resume_at)
-
-                                if resume_at is not None:
-                                    resume_dt = datetime.fromtimestamp(resume_at)
-                                    logger.warning(
-                                        "Processing paused due to quota: %s - Auto-resume scheduled for %s",
-                                        pause_reason,
-                                        resume_dt.isoformat(),
-                                    )
-                                else:
-                                    logger.warning(
-                                        "Processing paused due to quota: %s - Manual resume required",
-                                        pause_reason,
-                                    )
-
-                    log_progress_update(
-                        successful_calls + failed_calls,
-                        len(artists),
-                        artist.name,
-                        True,
-                        duration,
-                        worker_id,
-                    )
-                    # Print response to stdout
-                    print(api_response.response_text)
-
-            except Exception as e:
-                # Enhanced error isolation - each thread failure is isolated
-                failed_calls += 1
-                exc_name = type(e).__name__
-                error_msg = f"Concurrent processing error [{exc_name}]: {str(e)}"
-
-                error_response = ApiResponse(
-                    artist_id=artist.artist_id,
-                    artist_name=artist.name,
-                    artist_data=artist.data,
-                    response_text="",
-                    response_id="",
-                    created=0,
-                    error=error_msg,
-                )
-                
-                # Stream exception error response to JSONL file
-                try:
-                    append_jsonl_response(error_response, output_path, prompt_id, version)
-                    logger.debug(f"Streamed exception error response for '{artist.name}' to {output_path}")
-                except Exception as stream_e:
-                    logger.error(f"Failed to stream exception error response for '{artist.name}': {stream_e}")
-                
-                log_progress_update(
-                    successful_calls + failed_calls, len(artists), artist.name, False, 0.0, worker_id
-                )
-                logger.error(
-                    f"[{worker_id}] Thread error processing artist '{artist.name}': {error_msg}"
-                )
-
-            # Log periodic progress updates during concurrent processing
-            current_time = time.time()
-            total_processed = successful_calls + failed_calls
-            if (
-                total_processed % progress_interval == 0
-                or total_processed == len(artists)
-                or current_time - last_progress_time >= 5.0
-            ):  # At least every 5 seconds
-
-                elapsed_time = current_time - last_progress_time
-                current_rate = (
-                    total_processed / elapsed_time if elapsed_time > 0 else 0
-                )
-                remaining_artists = len(artists) - total_processed
-                estimated_remaining_time = (
-                    remaining_artists / current_rate if current_rate > 0 else 0
-                )
-
-                # Include quota metrics in progress logging if monitoring is enabled
-                quota_status_msg = ""
-                if quota_monitor is not None:
-                    metrics = quota_monitor.get_current_metrics()
-                    if metrics is not None:
-                        quota_status_msg = f" - Quota: {metrics.usage_percentage:.1f}% used"
-
-                logger.info(
-                    f"📊 Concurrent Progress: {total_processed}/{len(artists)} artists processed "
-                    f"({(total_processed/len(artists)*100):.1f}%) - "
-                    f"Rate: {current_rate:.2f} artists/sec - "
-                    f"ETA: {estimated_remaining_time:.0f}s remaining{quota_status_msg}"
-                )
-                last_progress_time = current_time
-
-    logger.info(
-        f"Concurrent processing completed: {successful_calls} successful, {failed_calls} failed"
+    # Create processing context with all resources
+    context = ProcessingContext(
+        client=client,
+        output_path=output_path,
+        db_pool=db_pool,
+        resume_mode=resume_mode,
+        daily_request_limit=daily_request_limit,
+        quota_threshold=quota_threshold,
+        quota_monitoring=quota_monitoring,
     )
 
-    # Clean up any active auto-resume timers
-    with _timer_lock:
-        if _active_timers:
-            logger.debug("Cancelling %d active auto-resume timer(s)", len(_active_timers))
-            for timer in _active_timers:
-                timer.cancel()
-            _active_timers.clear()
+    # Use context manager for proper resource lifecycle
+    with context:
+        # Create orchestrator to handle processing logic
+        orchestrator = ProcessingOrchestrator(
+            context=context,
+            prompt_id=prompt_id,
+            version=version,
+            max_workers=max_workers,
+            test_mode=test_mode,
+        )
 
-    return successful_calls, failed_calls
+        # Process artists and return results
+        return orchestrator.process_artists(artists)
