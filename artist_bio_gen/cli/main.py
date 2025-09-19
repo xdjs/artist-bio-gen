@@ -47,50 +47,10 @@ from ..utils import (
 )
 
 from ..config import Env
+from ..config.loader import ConfigLoader
+from ..config.schema import ConfigSchema
 
 logger = logging.getLogger(__name__)
-
-
-def _build_cli_overrides(args) -> dict:
-    """
-    Build CLI override dictionary from parsed arguments.
-    Only includes values that were explicitly provided on the command line.
-    """
-    overrides = {}
-    
-    # Map CLI argument names to environment variable names
-    cli_to_env_mapping = {
-        "openai_api_key": "OPENAI_API_KEY",
-        "db_url": "DATABASE_URL",
-        "openai_prompt_id": "OPENAI_PROMPT_ID",
-        "openai_org_id": "OPENAI_ORG_ID",
-    }
-    
-    # Only include values that were explicitly provided
-    for cli_name, env_name in cli_to_env_mapping.items():
-        # Use getattr to safely get the attribute with underscores converted to dashes
-        cli_attr = cli_name.replace("_", "_")  # Keep underscores for attribute access
-        if hasattr(args, cli_attr) and getattr(args, cli_attr) is not None:
-            overrides[env_name] = getattr(args, cli_attr)
-    
-    # Handle special case for prompt-id which could come from --prompt-id or --openai-prompt-id
-    if hasattr(args, "prompt_id") and args.prompt_id is not None:
-        overrides["OPENAI_PROMPT_ID"] = args.prompt_id
-
-    # Quota-related flags map directly to env-style keys when explicitly provided
-    # Only include if not None (ensures truly explicit CLI setting)
-    if getattr(args, "quota_threshold", None) is not None:
-        overrides["QUOTA_THRESHOLD"] = str(args.quota_threshold)
-    if getattr(args, "quota_monitoring", None) is not None:
-        overrides["QUOTA_MONITORING"] = str(args.quota_monitoring)
-    if getattr(args, "daily_limit", None) is not None:
-        overrides["DAILY_REQUEST_LIMIT"] = str(args.daily_limit)
-    if getattr(args, "pause_duration", None) is not None:
-        overrides["PAUSE_DURATION_HOURS"] = str(args.pause_duration)
-    if getattr(args, "quota_log_interval", None) is not None:
-        overrides["QUOTA_LOG_INTERVAL"] = str(args.quota_log_interval)
-
-    return overrides
 
 
 def main():
@@ -101,10 +61,28 @@ def main():
     # Setup logging with verbose flag
     setup_logging(verbose=args.verbose)
 
-    # Load environment configuration with CLI overrides
+    # Load environment configuration using the new schema-driven approach
     try:
-        cli_overrides = _build_cli_overrides(args)
-        env = Env.load(cli_overrides)
+        # Use ConfigLoader directly with parsed args for cleaner integration
+        config = ConfigLoader.load(schema=ConfigSchema, cli_args=args)
+
+        # Create Env instance for backward compatibility
+        env = Env(
+            OPENAI_API_KEY=config.openai_api_key,
+            DATABASE_URL=config.database_url,
+            OPENAI_PROMPT_ID=config.openai_prompt_id,
+            QUOTA_MONITORING=config.quota_monitoring,
+            QUOTA_THRESHOLD=config.quota_threshold,
+            DAILY_REQUEST_LIMIT=config.daily_request_limit,
+            PAUSE_DURATION_HOURS=config.pause_duration_hours,
+            QUOTA_LOG_INTERVAL=config.quota_log_interval,
+        )
+
+        # Set the global env instance for components that use Env.current()
+        # This is a bit of a hack but maintains backward compatibility
+        import artist_bio_gen.config.env as env_module
+        env_module._ENV = env
+
     except Exception as e:
         logger.error(f"Configuration error: {e}")
         sys.exit(EXIT_CONFIG_ERROR)
@@ -146,8 +124,8 @@ def main():
             logger.info("=" * 70)
             return
 
-        # Validate required configuration - now handled by Env.load()
-        # OPENAI_PROMPT_ID is optional, so we need to check it here for backward compatibility
+        # Validate required configuration - now handled by schema validation
+        # OPENAI_PROMPT_ID is optional in the schema, so check it here for backward compatibility
         if not env.OPENAI_PROMPT_ID:
             logger.error(
                 "Prompt ID is required. Set OPENAI_PROMPT_ID environment variable or use --prompt-id"
@@ -216,7 +194,7 @@ def main():
                 start_time=start_time,
                 end_time=end_time,
             )
-            
+
             logger.warning("Processing interrupted by user (Ctrl+C). Partial summary:")
             logger.info(f"Partial results saved to streaming output: {args.output}")
             log_processing_summary(stats)

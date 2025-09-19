@@ -29,12 +29,8 @@ def create_openai_client() -> "OpenAI":
 
     # Get configuration from centralized environment manager
     env = Env.current()
-    
-    # Create client with API key and optional organization ID
-    client_kwargs = {"api_key": env.OPENAI_API_KEY}
-    if env.OPENAI_ORG_ID:
-        client_kwargs["organization"] = env.OPENAI_ORG_ID
 
-    client = OpenAI(**client_kwargs)
+    # Create client with API key
+    client = OpenAI(api_key=env.OPENAI_API_KEY)
     logger.info("OpenAI client initialized successfully")
     return client

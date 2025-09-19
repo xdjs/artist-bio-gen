@@ -102,7 +102,7 @@ class TestEnvironmentIntegration(unittest.TestCase):
             "artist_bio_gen",
             "--input-file", test_file,
             "--openai-api-key", "cli_api_key",
-            "--openai-prompt-id", "cli_prompt",
+            "--prompt-id", "cli_prompt",
             "--dry-run"
         ]
         
@@ -116,12 +116,12 @@ class TestEnvironmentIntegration(unittest.TestCase):
         self.assertEqual(env.OPENAI_API_KEY, "cli_api_key")  # CLI override
         self.assertEqual(env.DATABASE_URL, "postgresql://env:env@localhost:5432/env")  # From env
         self.assertEqual(env.OPENAI_PROMPT_ID, "cli_prompt")  # CLI override
-        self.assertIsNone(env.OPENAI_ORG_ID)
 
     @patch.dict(os.environ, {}, clear=True)
-    @patch('artist_bio_gen.config.env._load_from_dotenv_file')
+    @patch('artist_bio_gen.config.loader._load_from_dotenv_file')
     def test_missing_required_config_error_integration(self, mock_dotenv):
         """Test that missing required configuration produces proper error in main()."""
+        mock_dotenv.return_value = None
         test_content = "550e8400-e29b-41d4-a716-446655440001,Error Test,Error Data"
         test_file = self.create_test_file(test_content)
         
@@ -140,8 +140,10 @@ class TestEnvironmentIntegration(unittest.TestCase):
         self.assertEqual(cm.exception.code, 3)
 
     @patch.dict(os.environ, {}, clear=True)
-    def test_cli_provides_all_required_config(self):
+    @patch('artist_bio_gen.config.loader._load_from_dotenv_file')
+    def test_cli_provides_all_required_config(self, mock_dotenv):
         """Test that CLI can provide all required configuration."""
+        mock_dotenv.return_value = None
         test_content = "550e8400-e29b-41d4-a716-446655440001,CLI Complete,CLI Complete Data"
         test_file = self.create_test_file(test_content)
         
@@ -151,7 +153,7 @@ class TestEnvironmentIntegration(unittest.TestCase):
             "--input-file", test_file,
             "--openai-api-key", "cli_complete_key",
             "--db-url", "postgresql://cli:cli@localhost:5432/cli",
-            "--openai-prompt-id", "cli_complete_prompt",
+            "--prompt-id", "cli_complete_prompt",
             "--dry-run"
         ]
         
@@ -189,7 +191,7 @@ class TestEnvironmentIntegration(unittest.TestCase):
         sys.argv = [
             "artist_bio_gen",
             "--input-file", test_file,
-            "--openai-prompt-id", "  ws_prompt  ",
+            "--prompt-id", "  ws_prompt  ",
             "--dry-run"
         ]
         
