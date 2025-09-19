@@ -112,6 +112,7 @@ tools/processed/
 
 # Temporary files
 tmp/
+test_output*.txt
 
 # IDE
 .vscode/
