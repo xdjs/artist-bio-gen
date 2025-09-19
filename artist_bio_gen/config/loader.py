@@ -77,7 +77,9 @@ class ConfigLoader:
                             stripped = cli_value.strip()
                             if stripped:
                                 config_dict[field_name] = stripped
-                            # Don't add if empty string
+                            else:
+                                # Treat explicit empty string as an override to clear the value
+                                config_dict[field_name] = None
                         else:
                             config_dict[field_name] = cli_value
 
@@ -92,7 +94,9 @@ class ConfigLoader:
                         stripped = value.strip()
                         if stripped:
                             config_dict[field_name] = stripped
-                        # Don't add if empty string
+                        else:
+                            # Treat explicit empty string as an override to clear the value
+                            config_dict[field_name] = None
                     else:
                         config_dict[field_name] = value
 
