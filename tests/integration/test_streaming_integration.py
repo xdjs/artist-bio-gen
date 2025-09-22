@@ -9,11 +9,16 @@ interruption scenarios.
 
 import json
 import os
+import sys
 import tempfile
 import time
 import unittest
 from unittest.mock import MagicMock, patch
 from concurrent.futures import ThreadPoolExecutor
+
+# Add parent directory to path to import helpers
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from helpers.streaming import create_streaming_mock
 
 from artist_bio_gen.core.parser import parse_input_file
 from artist_bio_gen.core.processor import process_artists_concurrent
@@ -97,7 +102,7 @@ class TestStreamingIntegration(unittest.TestCase):
         self.assertLess(parse_duration, 5.0, f"Parsing took too long: {parse_duration:.2f}s")
         
         # Mock the API call to simulate successful processing
-        def mock_call_openai_api(client, artist, prompt_id, version, worker_id, db_connection, skip_existing, test_mode, quota_monitor=None, pause_controller=None):
+        def mock_call_openai_api(client, artist, prompt_id, version, worker_id, db_connection, skip_existing, test_mode, quota_monitor=None, pause_controller=None, output_path=None):
             return self._create_mock_api_response(artist, success=True)
             
         mock_client = self._create_mock_openai_client()
@@ -163,15 +168,15 @@ class TestStreamingIntegration(unittest.TestCase):
         
         # Mock API call with mixed success/failure
         call_count = 0
-        def mock_call_openai_api_mixed(client, artist, prompt_id, version, worker_id, db_connection, skip_existing, test_mode, quota_monitor=None, pause_controller=None):
+        def mock_call_openai_api_mixed(client, artist, prompt_id, version, worker_id, db_connection, skip_existing, test_mode, quota_monitor=None, pause_controller=None, output_path=None):
             nonlocal call_count
             call_count += 1
             # Fail every 5th call (20% failure rate)
             success = (call_count % 5) != 0
             return self._create_mock_api_response(artist, success=success)
-            
+
         mock_client = self._create_mock_openai_client()
-        
+
         with patch('artist_bio_gen.core.orchestrator.call_openai_api', side_effect=mock_call_openai_api_mixed):
             successful_calls, failed_calls = process_artists_concurrent(
                 artists=parse_result.artists,
@@ -230,7 +235,7 @@ class TestStreamingIntegration(unittest.TestCase):
         
         # Mock API call that tracks processing
         processed_count = 0
-        def mock_call_openai_api_counting(client, artist, prompt_id, version, worker_id, db_connection, skip_existing, test_mode, quota_monitor=None, pause_controller=None):
+        def mock_call_openai_api_counting(client, artist, prompt_id, version, worker_id, db_connection, skip_existing, test_mode, quota_monitor=None, pause_controller=None, output_path=None):
             nonlocal processed_count
             processed_count += 1
             return self._create_mock_api_response(artist, success=True)
@@ -239,7 +244,7 @@ class TestStreamingIntegration(unittest.TestCase):
         
         # First processing run - process only first portion
         first_batch = parse_result.artists[:resume_point]
-        
+
         with patch('artist_bio_gen.core.orchestrator.call_openai_api', side_effect=mock_call_openai_api_counting):
             successful_calls_1, failed_calls_1 = process_artists_concurrent(
                 artists=first_batch,
@@ -273,7 +278,7 @@ class TestStreamingIntegration(unittest.TestCase):
         
         # Reset counter for second run
         processed_count = 0
-        
+
         # Second processing run - process remaining artists in resume mode
         with patch('artist_bio_gen.core.orchestrator.call_openai_api', side_effect=mock_call_openai_api_counting):
             successful_calls_2, failed_calls_2 = process_artists_concurrent(
@@ -318,13 +323,12 @@ class TestStreamingIntegration(unittest.TestCase):
         
         parse_result = parse_input_file(input_path)
         
-        def mock_call_openai_api_concurrent(client, artist, prompt_id, version, worker_id, db_connection, skip_existing, test_mode, quota_monitor=None, pause_controller=None):
+        def mock_call_openai_api_concurrent(client, artist, prompt_id, version, worker_id, db_connection, skip_existing, test_mode, quota_monitor=None, pause_controller=None, output_path=None):
             # Add small random delay to increase chance of race conditions
             time.sleep(0.001)
             return self._create_mock_api_response(artist, success=True)
-            
         mock_client = self._create_mock_openai_client()
-        
+
         with patch('artist_bio_gen.core.orchestrator.call_openai_api', side_effect=mock_call_openai_api_concurrent):
             successful_calls, failed_calls = process_artists_concurrent(
                 artists=parse_result.artists,

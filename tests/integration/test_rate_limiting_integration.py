@@ -13,6 +13,7 @@ This module tests the complete rate limiting system including:
 
 import json
 import os
+import sys
 import tempfile
 import threading
 import time
@@ -21,6 +22,10 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
 from typing import Dict, Any, List
 from unittest.mock import Mock, MagicMock, patch, call
+
+# Add parent directory to path to import helpers
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from helpers.streaming import create_streaming_mock
 
 from artist_bio_gen.api.operations import call_openai_api
 from artist_bio_gen.api.quota import QuotaMonitor, PauseController
