@@ -18,6 +18,9 @@ from artist_bio_gen.api.quota import (
     should_pause_processing,
     QuotaMonitor,
     PauseController,
+)
+# Import private functions directly from the parsing module for testing
+from artist_bio_gen.api.quota.parsing import (
     _parse_header_int,
     _parse_reset_header
 )
@@ -347,7 +350,7 @@ class TestQuotaMonitor(unittest.TestCase):
         # Should have 30 requests total (3 threads * 10 updates each)
         self.assertEqual(self.monitor.requests_used_today, 30)
 
-    @patch('artist_bio_gen.api.quota.datetime')
+    @patch('artist_bio_gen.api.quota.monitor.datetime')
     def test_daily_reset(self, mock_datetime):
         """Test daily counter reset functionality."""
         # Set up initial state
