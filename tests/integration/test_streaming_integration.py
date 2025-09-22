@@ -109,7 +109,7 @@ class TestStreamingIntegration(unittest.TestCase):
         
         # Test streaming processing with large dataset
         start_time = time.time()
-        with patch('artist_bio_gen.core.processor.call_openai_api', side_effect=create_streaming_mock(mock_call_openai_api)):
+        with patch('artist_bio_gen.core.orchestrator.call_openai_api', side_effect=mock_call_openai_api):
             successful_calls, failed_calls = process_artists_concurrent(
                 artists=parse_result.artists,
                 client=mock_client,
@@ -174,10 +174,10 @@ class TestStreamingIntegration(unittest.TestCase):
             # Fail every 5th call (20% failure rate)
             success = (call_count % 5) != 0
             return self._create_mock_api_response(artist, success=success)
-            
+
         mock_client = self._create_mock_openai_client()
-        
-        with patch('artist_bio_gen.core.processor.call_openai_api', side_effect=create_streaming_mock(mock_call_openai_api_mixed)):
+
+        with patch('artist_bio_gen.core.orchestrator.call_openai_api', side_effect=mock_call_openai_api_mixed):
             successful_calls, failed_calls = process_artists_concurrent(
                 artists=parse_result.artists,
                 client=mock_client,
@@ -244,8 +244,8 @@ class TestStreamingIntegration(unittest.TestCase):
         
         # First processing run - process only first portion
         first_batch = parse_result.artists[:resume_point]
-        
-        with patch('artist_bio_gen.core.processor.call_openai_api', side_effect=create_streaming_mock(mock_call_openai_api_counting)):
+
+        with patch('artist_bio_gen.core.orchestrator.call_openai_api', side_effect=mock_call_openai_api_counting):
             successful_calls_1, failed_calls_1 = process_artists_concurrent(
                 artists=first_batch,
                 client=mock_client,
@@ -278,9 +278,9 @@ class TestStreamingIntegration(unittest.TestCase):
         
         # Reset counter for second run
         processed_count = 0
-        
+
         # Second processing run - process remaining artists in resume mode
-        with patch('artist_bio_gen.core.processor.call_openai_api', side_effect=create_streaming_mock(mock_call_openai_api_counting)):
+        with patch('artist_bio_gen.core.orchestrator.call_openai_api', side_effect=mock_call_openai_api_counting):
             successful_calls_2, failed_calls_2 = process_artists_concurrent(
                 artists=parse_result_resume.artists,
                 client=mock_client,
@@ -327,10 +327,9 @@ class TestStreamingIntegration(unittest.TestCase):
             # Add small random delay to increase chance of race conditions
             time.sleep(0.001)
             return self._create_mock_api_response(artist, success=True)
-            
         mock_client = self._create_mock_openai_client()
-        
-        with patch('artist_bio_gen.core.processor.call_openai_api', side_effect=create_streaming_mock(mock_call_openai_api_concurrent)):
+
+        with patch('artist_bio_gen.core.orchestrator.call_openai_api', side_effect=mock_call_openai_api_concurrent):
             successful_calls, failed_calls = process_artists_concurrent(
                 artists=parse_result.artists,
                 client=mock_client,

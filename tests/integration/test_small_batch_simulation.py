@@ -134,7 +134,7 @@ class SmallBatchTestSimulator:
                 return self.simulate_api_response(artist, config.get('scenario', 'normal'))
 
             try:
-                with patch('artist_bio_gen.core.processor.call_openai_api', side_effect=mock_api_call):
+                with patch('artist_bio_gen.core.orchestrator.call_openai_api', side_effect=mock_api_call):
                     successful, failed = process_artists_concurrent(
                         artists=artists[:config.get('batch_size', self.num_artists)],
                         client=mock_client,

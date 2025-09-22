@@ -120,7 +120,7 @@ class TestQuotaThresholdTriggering(unittest.TestCase):
                     error=None
                 ), 0.1
 
-            with patch('artist_bio_gen.core.processor.call_openai_api', side_effect=mock_api_call):
+            with patch('artist_bio_gen.core.orchestrator.call_openai_api', side_effect=mock_api_call):
                 successful, failed = process_artists_concurrent(
                     artists=artists[:6],  # Process 6 artists (should pause after 5)
                     client=mock_client,
@@ -147,7 +147,7 @@ class TestQuotaThresholdTriggering(unittest.TestCase):
             output_path = os.path.join(tmpdir, "test_output.jsonl")
 
             # Test with invalid threshold (should be clamped or raise error)
-            with patch('artist_bio_gen.core.processor.call_openai_api') as mock_api:
+            with patch('artist_bio_gen.core.orchestrator.call_openai_api') as mock_api:
                 # Create a proper ApiResponse instead of bare Mock
                 mock_response = ApiResponse(
                     artist_id=1,
@@ -485,7 +485,7 @@ class TestProgressPreservation(unittest.TestCase):
                     error=None
                 ), 0.01
 
-            with patch('artist_bio_gen.core.processor.call_openai_api', side_effect=create_streaming_mock(mock_api_call)):
+            with patch('artist_bio_gen.core.orchestrator.call_openai_api', side_effect=mock_api_call):
                 try:
                     process_artists_concurrent(
                         artists=artists,
@@ -575,7 +575,7 @@ class TestProgressPreservation(unittest.TestCase):
                     error=None
                 ), 0.01
 
-            with patch('artist_bio_gen.core.processor.call_openai_api', side_effect=create_streaming_mock(mock_api_call_run1)):
+            with patch('artist_bio_gen.core.orchestrator.call_openai_api', side_effect=mock_api_call_run1):
                 # Process first batch
                 process_artists_concurrent(
                     artists=artists[:5],  # Only process first 5
@@ -612,7 +612,7 @@ class TestProgressPreservation(unittest.TestCase):
                     error=None
                 ), 0.01
 
-            with patch('artist_bio_gen.core.processor.call_openai_api', side_effect=create_streaming_mock(mock_api_call_run2)):
+            with patch('artist_bio_gen.core.orchestrator.call_openai_api', side_effect=mock_api_call_run2):
                 # Process remaining artists in resume mode
                 process_artists_concurrent(
                     artists=artists[5:],  # Process last 5

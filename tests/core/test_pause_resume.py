@@ -102,7 +102,7 @@ class TestPauseResume(unittest.TestCase):
         mock_response.usage = None
 
         # Mock successful API calls
-        with patch('artist_bio_gen.core.processor.call_openai_api') as mock_call_api:
+        with patch('artist_bio_gen.core.orchestrator.call_openai_api') as mock_call_api:
             # Setup mock to return successful response
             from artist_bio_gen.models import ApiResponse
             mock_api_response = ApiResponse(
@@ -155,12 +155,12 @@ class TestPauseResume(unittest.TestCase):
 
         resume_timestamp = time.time() + 60
 
-        with patch("artist_bio_gen.core.processor.call_openai_api") as mock_call_api, \
+        with patch("artist_bio_gen.core.orchestrator.call_openai_api") as mock_call_api, \
              patch(
-                 "artist_bio_gen.core.processor._estimate_resume_time",
+                 "artist_bio_gen.core.orchestrator.ProcessingOrchestrator._estimate_resume_time",
                  return_value=resume_timestamp,
              ) as mock_estimate, \
-             patch("artist_bio_gen.core.processor.threading.Timer") as mock_timer_ctor, \
+             patch("artist_bio_gen.core.orchestrator.threading.Timer") as mock_timer_ctor, \
              patch.object(
                  QuotaMonitor,
                  "should_pause",
@@ -233,7 +233,7 @@ class TestPauseResume(unittest.TestCase):
         mock_client = Mock()
 
         # Mock successful API calls
-        with patch('artist_bio_gen.core.processor.call_openai_api') as mock_call_api:
+        with patch('artist_bio_gen.core.orchestrator.call_openai_api') as mock_call_api:
             from artist_bio_gen.models import ApiResponse
             mock_api_response = ApiResponse(
                 artist_id=1,

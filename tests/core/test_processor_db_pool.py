@@ -70,7 +70,7 @@ class TestProcessorDbPool(unittest.TestCase):
             output_path = f.name
         
         try:
-            with patch("artist_bio_gen.core.processor.call_openai_api", side_effect=fake_call_openai_api):
+            with patch("artist_bio_gen.core.orchestrator.call_openai_api", side_effect=fake_call_openai_api):
                 success, failed = process_artists_concurrent(
                     artists=artists,
                     client=object(),
@@ -109,7 +109,7 @@ class TestProcessorDbPool(unittest.TestCase):
             output_path = f.name
         
         try:
-            with patch("artist_bio_gen.core.processor.call_openai_api", side_effect=fake_call_openai_api_fail):
+            with patch("artist_bio_gen.core.orchestrator.call_openai_api", side_effect=fake_call_openai_api_fail):
                 success, failed = process_artists_concurrent(
                     artists=artists,
                     client=object(),
